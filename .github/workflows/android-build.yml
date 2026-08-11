@@ -10,6 +10,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free up runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet \
+            /opt/ghc /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY" \
+            /usr/local/share/boost /usr/local/graalvm /usr/local/.ghcup \
+            /usr/lib/jvm
+          docker image prune -a -f || true
+          df -h /
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
