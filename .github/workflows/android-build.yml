@@ -36,12 +36,21 @@ jobs:
       - name: Prebuild native Android project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build debug APK
+      - name: Build release APK
+        # "release" build type, but still signed with the auto-generated
+        # debug keystore (android/app/build.gradle already falls back to
+        # signingConfigs.debug for release when no real release credentials
+        # are configured) — this is what actually matters here: a
+        # standalone APK with the JS bundle embedded, matching what EAS's
+        # preview builds produce. assembleDebug does NOT bundle JS by
+        # default and instead expects a live Metro connection, which just
+        # opens expo-dev-client's launcher screen with nothing to load
+        # (found 2026-08-11, testing on-device).
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sonder-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: sonder-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
