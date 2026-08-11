@@ -1,0 +1,42 @@
+diff --git a/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js b/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js
+index 1ea35ed..01f6407 100644
+--- a/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js
++++ b/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js
+@@ -115,6 +115,9 @@ function useFaceLandmarkDetection(onResults, onError, runningMode, model, option
+     "worklet";
+ 
+     // console.log(frame.orientation, frame.width, frame.height);
++    if (detectorHandle === undefined) {
++      return;
++    }
+     plugin?.call(frame, {
+       detectorHandle
+     });
+diff --git a/node_modules/react-native-mediapipe/lib/module/faceLandmarkDetection/index.js b/node_modules/react-native-mediapipe/lib/module/faceLandmarkDetection/index.js
+index a97b19b..be145e9 100644
+--- a/node_modules/react-native-mediapipe/lib/module/faceLandmarkDetection/index.js
++++ b/node_modules/react-native-mediapipe/lib/module/faceLandmarkDetection/index.js
+@@ -106,6 +106,9 @@ export function useFaceLandmarkDetection(onResults, onError, runningMode, model,
+     "worklet";
+ 
+     // console.log(frame.orientation, frame.width, frame.height);
++    if (detectorHandle === undefined) {
++      return;
++    }
+     plugin?.call(frame, {
+       detectorHandle
+     });
+diff --git a/node_modules/react-native-mediapipe/src/faceLandmarkDetection/index.ts b/node_modules/react-native-mediapipe/src/faceLandmarkDetection/index.ts
+index 6813fe8..dbb0147 100644
+--- a/node_modules/react-native-mediapipe/src/faceLandmarkDetection/index.ts
++++ b/node_modules/react-native-mediapipe/src/faceLandmarkDetection/index.ts
+@@ -269,6 +269,9 @@ export function useFaceLandmarkDetection(
+     (frame) => {
+       "worklet";
+       // console.log(frame.orientation, frame.width, frame.height);
++      if (detectorHandle === undefined) {
++        return;
++      }
+       plugin?.call(frame, { detectorHandle });
+     },
+     [detectorHandle]
