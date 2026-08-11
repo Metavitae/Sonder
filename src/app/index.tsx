@@ -131,31 +131,56 @@ export default function FaceSignatureTest({
   // latest quality reading is (read live via a ref, not closed over, so the
   // running loop always reacts to the current frame rather than the frame
   // that started it).
-  const startHapticLoop = useCallback(() => {
-    if (hapticActiveRef.current) return;
-    hapticActiveRef.current = true;
+  const tick = useCallback(() => {
+    if (!hapticActiveRef.current) return;
+    const severity = Math.max(
+      0,
+      Math.min(1, 1 - latestQualityRef.current / WELL_FRAMED_THRESHOLD)
+    );
+    Haptics.impactAsync(
+      severity > 0.6
+        ? Haptics.ImpactFeedbackStyle.Medium
+        : Haptics.ImpactFeedbackStyle.Light
+    );
+    // TEMPORARY trace log — see stopHapticLoop's matching note.
+    console.log(
+      `[haptic] buzz, q=${latestQualityRef.current.toFixed(2)} severity=${severity.toFixed(2)}`
+    );
+    const delay =
+      HAPTIC_MAX_INTERVAL_MS -
+      severity * (HAPTIC_MAX_INTERVAL_MS - HAPTIC_MIN_INTERVAL_MS);
+    hapticTimeoutRef.current = setTimeout(tick, delay);
+  }, []);
 
-    const tick = () => {
-      if (!hapticActiveRef.current) return;
-      const severity = Math.max(
-        0,
-        Math.min(1, 1 - latestQualityRef.current / WELL_FRAMED_THRESHOLD)
-      );
-      Haptics.impactAsync(
-        severity > 0.6
-          ? Haptics.ImpactFeedbackStyle.Medium
-          : Haptics.ImpactFeedbackStyle.Light
-      );
-      // TEMPORARY trace log — see stopHapticLoop's matching note.
-      console.log(
-        `[haptic] buzz, q=${latestQualityRef.current.toFixed(2)} severity=${severity.toFixed(2)}`
-      );
-      const delay =
-        HAPTIC_MAX_INTERVAL_MS -
-        severity * (HAPTIC_MAX_INTERVAL_MS - HAPTIC_MIN_INTERVAL_MS);
-      hapticTimeoutRef.current = setTimeout(tick, delay);
-    };
-    tick();
+  const startHapticLoop = useCallback(() => {
+    hapticActiveRef.current = true;
+    // Resumes a paused loop (see pausePendingTick) as well as a cold
+    // start — either way, if nothing is currently scheduled, tick now.
+    if (hapticTimeoutRef.current === null) tick();
+  }, [tick]);
+
+  // Real bug found 2026-08-11 by tracing the Aug 9 debounce fix: that fix
+  // only debounced WHEN hapticActiveRef flips to false (stopHapticLoop was
+  // called after HAPTIC_STOP_DEBOUNCE_MS of continuous good framing) but
+  // left the independently-scheduled tick() timer running untouched during
+  // that whole debounce window. Whenever framing was quite poor right
+  // before the person re-centered (short tick interval, near
+  // HAPTIC_MIN_INTERVAL_MS), the next tick could already be scheduled to
+  // fire sooner than the 200ms debounce completes — so it fires *after*
+  // re-framing, before stopHapticLoop() gets a chance to cancel it. That's
+  // the real cause of "buzz continues for a beat after re-framing," not
+  // perception — a genuine extra Haptics.impactAsync() call slipping
+  // through. Fix: cancel the pending tick the INSTANT framing crosses into
+  // well-framed, not only after the debounce confirms a real stop.
+  // hapticActiveRef deliberately stays true during this pause (not flipped
+  // to false) so a genuine re-framing dip within the debounce window
+  // resumes ticking immediately via startHapticLoop's "nothing currently
+  // scheduled" check, rather than going through a cold restart.
+  const pausePendingTick = useCallback(() => {
+    if (hapticTimeoutRef.current !== null) {
+      clearTimeout(hapticTimeoutRef.current);
+      hapticTimeoutRef.current = null;
+    }
   }, []);
 
   useEffect(() => stopHapticLoop, [stopHapticLoop]);
@@ -193,12 +218,15 @@ export default function FaceSignatureTest({
       startHapticLoop();
     } else {
       const now = Date.now();
-      if (wellFramedSinceRef.current === null) wellFramedSinceRef.current = now;
+      if (wellFramedSinceRef.current === null) {
+        wellFramedSinceRef.current = now;
+        pausePendingTick();
+      }
       if (now - wellFramedSinceRef.current >= HAPTIC_STOP_DEBOUNCE_MS) {
         stopHapticLoop();
       }
     }
-  }, [quality, cameraMode, startHapticLoop, stopHapticLoop]);
+  }, [quality, cameraMode, startHapticLoop, stopHapticLoop, pausePendingTick]);
 
   const onError = useCallback((error: { code: number; message: string }) => {
     console.error("Face landmark detection error:", error.code, error.message);
