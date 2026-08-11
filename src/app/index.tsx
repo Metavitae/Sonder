@@ -18,15 +18,25 @@ import {
   useFaceLandmarkDetection,
   type FaceLandmarkDetectionResultBundle,
 } from "react-native-mediapipe";
-import { ShaderMistPoC } from "../components/ShaderMistPoC";
+import { AmbientMist, setMistColor, type MistColor } from "../components/AmbientMist";
 
-// The 3-layer stacked-SurfaceView test (MistThreeLayerTest.tsx) already
-// delivered its verdict — CHOPPY, per "Sonder - Log - Part 11 results" — so
-// this screen now runs the shader-based single-Skia-surface alternative
-// instead (ShaderMistPoC.tsx), per "Sonder - Shader-Based Mixing:
-// Proof-of-Concept Only (canonical 2026-08-09)". Same real-condition
-// methodology: real logcat signals with camera + MediaPipe running
-// concurrently, not a visual read.
+// Both the N>=3 stacked-SurfaceView approach (MistThreeLayerTest.tsx,
+// CHOPPY — "Sonder - Log - Part 11 results") and the single-Skia-surface
+// shader-mixing alternative (ShaderMistPoC.tsx, deleted 2026-08-11 — real
+// native SIGSEGV inside react-native-skia's own library under 3-concurrent-
+// decoder + blend load, see "Sonder - Log - Three-layer H264 test crashes
+// natively inside Skia itself") are ruled out. This screen now tests the
+// last untested option from the four flagged 2026-08-06: fewer concurrent
+// decoders. AmbientMist.tsx caps at exactly 2 (expo-video/ExoPlayer, not
+// Skia's video path — a completely different, mature player), built back
+// on Aug 6 as the design fallback but never itself put through the same
+// real-device logcat test as the N=3/N=5 failures. TEMP_MIST_CYCLE below
+// forces repeated crossfade transitions (the real stress case for this
+// component, not an idle 2-video state) — same real-condition methodology
+// as every prior layer-count test: real logcat signals with camera +
+// MediaPipe running concurrently, not a visual read.
+const TEMP_MIST_CYCLE: MistColor[] = ["violet", "cyan", "amber", "magenta", "blue"];
+const TEMP_MIST_CYCLE_MS = 3000;
 
 // De-risking PoC for the Kithe/Sonder "needs boundary" Level 1 sensing
 // mechanism (§9 of the Complete Reference): does an on-device pipeline that
@@ -215,6 +225,19 @@ export default function FaceSignatureTest({
     if (device) solution.cameraDeviceChangeHandler(device);
   }, [solution, device]);
 
+  // TEMPORARY, evaluation-only: forces a fresh crossfade transition every
+  // TEMP_MIST_CYCLE_MS, cycling through all 5 mist colors — the real stress
+  // case for AmbientMist's 2-slot swap logic, not an idle steady-state.
+  // Remove once the layer-count verdict lands (2026-08-11).
+  useEffect(() => {
+    let i = 0;
+    const id = setInterval(() => {
+      i = (i + 1) % TEMP_MIST_CYCLE.length;
+      setMistColor(TEMP_MIST_CYCLE[i]);
+    }, TEMP_MIST_CYCLE_MS);
+    return () => clearInterval(id);
+  }, []);
+
   const mistStyle = useAnimatedStyle(() => ({
     opacity: 0.75 - quality.value * 0.55,
     backgroundColor: quality.value > 0.5 ? "#3a2c52" : "#0d1a2b",
@@ -248,11 +271,11 @@ export default function FaceSignatureTest({
         style={[StyleSheet.absoluteFillObject, mistStyle]}
         pointerEvents="none"
       />
-      <ShaderMistPoC />
+      <AmbientMist />
       {SHOW_DEBUG_OVERLAY && (
         <View style={styles.testHarnessLabel} pointerEvents="none">
           <Text style={styles.hudText}>
-            TEMP: shader mixing PoC (Part 12)
+            TEMP: 2-layer crossfade perf test
           </Text>
         </View>
       )}
