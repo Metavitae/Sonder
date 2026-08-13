@@ -18,22 +18,19 @@ import {
   useFaceLandmarkDetection,
   type FaceLandmarkDetectionResultBundle,
 } from "react-native-mediapipe";
-import { AmbientMist, setMistColor, type MistColor } from "../components/AmbientMist";
+import { ProceduralMistPoC } from "../components/ProceduralMistPoC";
+import type { MistColor } from "../components/AmbientMist";
 
-// Both the N>=3 stacked-SurfaceView approach (MistThreeLayerTest.tsx,
-// CHOPPY — "Sonder - Log - Part 11 results") and the single-Skia-surface
-// shader-mixing alternative (ShaderMistPoC.tsx, deleted 2026-08-11 — real
-// native SIGSEGV inside react-native-skia's own library under 3-concurrent-
-// decoder + blend load, see "Sonder - Log - Three-layer H264 test crashes
-// natively inside Skia itself") are ruled out. This screen now tests the
-// last untested option from the four flagged 2026-08-06: fewer concurrent
-// decoders. AmbientMist.tsx caps at exactly 2 (expo-video/ExoPlayer, not
-// Skia's video path — a completely different, mature player), built back
-// on Aug 6 as the design fallback but never itself put through the same
-// real-device logcat test as the N=3/N=5 failures. TEMP_MIST_CYCLE below
-// forces repeated crossfade transitions (the real stress case for this
-// component, not an idle 2-video state) — same real-condition methodology
-// as every prior layer-count test: real logcat signals with camera +
+// AmbientMist's 2-slot expo-video crossfade (last untested option from the
+// four flagged 2026-08-06) was verified viable — see commit history. Per
+// "Sonder - Direct Instructions for CC (2026-08-11, Part 18)", the N=1/N=2
+// decoder-cliff finding rules out any approach that leans on MediaCodec for
+// more than one concurrent stream, so this screen now evaluates option 1 of
+// three MediaCodec-free alternatives: a pure procedural GPU shader
+// (ProceduralMistPoC.tsx, no video file, no video decoder in the path at
+// all). TEMP_MIST_CYCLE below drives color changes so the shader is under
+// continuous animation, not an idle single-frame state — same real-condition
+// methodology as every prior mist test: real logcat signals with camera +
 // MediaPipe running concurrently, not a visual read.
 const TEMP_MIST_CYCLE: MistColor[] = ["violet", "cyan", "amber", "magenta", "blue"];
 const TEMP_MIST_CYCLE_MS = 3000;
@@ -106,6 +103,10 @@ export default function FaceSignatureTest({
   const hapticActiveRef = useRef(false);
   const hapticTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wellFramedSinceRef = useRef<number | null>(null);
+  // Addendum-only (see below): last time a quality trace was logged, and
+  // when the currently-scheduled haptic tick is expected to fire.
+  const lastQualityLogRef = useRef(0);
+  const tickScheduledAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
@@ -118,6 +119,7 @@ export default function FaceSignatureTest({
       clearTimeout(hapticTimeoutRef.current);
       hapticTimeoutRef.current = null;
     }
+    tickScheduledAtRef.current = null;
     // TEMPORARY trace log, unconditional (not gated on SHOW_DEBUG_OVERLAY —
     // preview/release builds run with __DEV__ false, and this is exactly
     // what's needed to confirm the Aug 9 late-stop fix on the next real
@@ -133,6 +135,20 @@ export default function FaceSignatureTest({
   // that started it).
   const tick = useCallback(() => {
     if (!hapticActiveRef.current) return;
+    const now = Date.now();
+    // Addendum requirement, per "Sonder - Direct Instructions for CC 2026-08-11
+    // Part 18 Addendum": the procedural shader is GPU/CPU work competing with
+    // MediaPipe on the same real thread budget, so a JS-thread stall it causes
+    // would show up here as this tick firing later than the delay it was
+    // actually scheduled for — a genuine haptic-response lag, distinct from
+    // the old MediaCodec decoder-contention bug (this path never touches
+    // MediaCodec, so that failure mode can't apply). tickScheduledAtRef is
+    // reset to null on any pause/stop so a resumed loop doesn't log a bogus
+    // drift spanning the pause itself.
+    if (tickScheduledAtRef.current !== null) {
+      const drift = now - tickScheduledAtRef.current;
+      console.log(`[part18] haptic tick drift=${drift}ms`);
+    }
     const severity = Math.max(
       0,
       Math.min(1, 1 - latestQualityRef.current / WELL_FRAMED_THRESHOLD)
@@ -149,6 +165,7 @@ export default function FaceSignatureTest({
     const delay =
       HAPTIC_MAX_INTERVAL_MS -
       severity * (HAPTIC_MAX_INTERVAL_MS - HAPTIC_MIN_INTERVAL_MS);
+    tickScheduledAtRef.current = now + delay;
     hapticTimeoutRef.current = setTimeout(tick, delay);
   }, []);
 
@@ -181,6 +198,7 @@ export default function FaceSignatureTest({
       clearTimeout(hapticTimeoutRef.current);
       hapticTimeoutRef.current = null;
     }
+    tickScheduledAtRef.current = null;
   }, []);
 
   useEffect(() => stopHapticLoop, [stopHapticLoop]);
@@ -212,6 +230,22 @@ export default function FaceSignatureTest({
     const clamped = Math.max(0, Math.min(1, frameScore));
     quality.value = withTiming(clamped, { duration: 350 });
     latestQualityRef.current = clamped;
+
+    // Addendum requirement, per "Sonder - Direct Instructions for CC 2026-08-11
+    // Part 18 Addendum": report actual quality-score behavior (steady vs.
+    // degraded) during the shader test window, not just render/crash status.
+    // Throttled to 2/sec (not full camera framerate) — enough to see a real
+    // trend on logcat without drowning it, matching the same real-condition
+    // rigor as the existing haptic trace logs.
+    const nowLog = Date.now();
+    if (nowLog - lastQualityLogRef.current >= 500) {
+      lastQualityLogRef.current = nowLog;
+      console.log(
+        `[part18] quality=${clamped.toFixed(2)} inference=${
+          result.inferenceTime !== undefined ? result.inferenceTime.toFixed(1) : "—"
+        }ms faces=${faces.length}`
+      );
+    }
 
     if (cameraMode === "face" && clamped < WELL_FRAMED_THRESHOLD) {
       wellFramedSinceRef.current = null;
@@ -253,15 +287,15 @@ export default function FaceSignatureTest({
     if (device) solution.cameraDeviceChangeHandler(device);
   }, [solution, device]);
 
-  // TEMPORARY, evaluation-only: forces a fresh crossfade transition every
-  // TEMP_MIST_CYCLE_MS, cycling through all 5 mist colors — the real stress
-  // case for AmbientMist's 2-slot swap logic, not an idle steady-state.
-  // Remove once the layer-count verdict lands (2026-08-11).
+  // TEMPORARY, evaluation-only: cycles the shader's color uniform every
+  // TEMP_MIST_CYCLE_MS so the PoC is under continuous change, not an idle
+  // steady-state. Remove once Part 18's three-option verdict lands.
+  const [mistColor, setMistColorState] = useState<MistColor>(TEMP_MIST_CYCLE[0]);
   useEffect(() => {
     let i = 0;
     const id = setInterval(() => {
       i = (i + 1) % TEMP_MIST_CYCLE.length;
-      setMistColor(TEMP_MIST_CYCLE[i]);
+      setMistColorState(TEMP_MIST_CYCLE[i]);
     }, TEMP_MIST_CYCLE_MS);
     return () => clearInterval(id);
   }, []);
@@ -299,11 +333,11 @@ export default function FaceSignatureTest({
         style={[StyleSheet.absoluteFillObject, mistStyle]}
         pointerEvents="none"
       />
-      <AmbientMist />
+      <ProceduralMistPoC color={mistColor} />
       {SHOW_DEBUG_OVERLAY && (
         <View style={styles.testHarnessLabel} pointerEvents="none">
           <Text style={styles.hudText}>
-            TEMP: 2-layer crossfade perf test
+            TEMP: Part 18 option 1 — procedural shader mist perf test
           </Text>
         </View>
       )}
