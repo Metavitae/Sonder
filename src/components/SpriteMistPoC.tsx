@@ -2,21 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 
-import type { MistColor } from "./AmbientMist";
 import manifest from "../../assets/mist/sprites/mist_atlas_manifest.json";
 
-// PoC only, per "Sonder - Direct Instructions for CC (2026-08-11, Part 18)",
-// option 3 of 3: pre-rendered frames as a texture atlas, GPU texture
-// sampling instead of video decode. Deliberately built on expo-image rather
-// than react-native-skia — unlike ProceduralMistPoC (option 1), this never
-// creates a Skia Canvas or compiles an SkSL shader at all, so if the
-// Addendum's "GPU-expensive approach degrades tracking" concern is really
-// about Skia's shader path specifically rather than "any GPU work," this is
-// the option that isolates that difference. The atlas itself
-// (assets/mist/sprites/mist_atlas.png) is baked once at build time by
-// scripts/generate-mist-atlas.js — nothing here computes noise or a shader
-// per pixel per frame, only a translate + clip to select a pre-rendered
-// frame, same mechanism as a classic CSS/RN sprite-sheet flipbook.
+export type MistColor = "violet" | "magenta" | "cyan" | "amber" | "blue";
+
+// Winner of Part 18's three-way comparison ("Sonder - Direct Instructions
+// for CC 2026-08-11, Part 18" + Addendum), founder verdict 2026-08-13:
+// pre-rendered frames as a texture atlas, GPU texture sampling instead of
+// video decode — no MediaCodec, no Skia Canvas/SkSL shader compile, just a
+// translate + clip to select a pre-rendered frame (same mechanism as a
+// classic CSS/RN sprite-sheet flipbook). The other two evaluated options
+// (ProceduralMistPoC, a Skia shader; VectorMistPoC, Lottie) and the
+// MediaCodec-based AmbientMist crossfade that predated Part 18 are removed.
+// The atlas itself (assets/mist/sprites/mist_atlas.png) is baked once at
+// build time by scripts/generate-mist-atlas.js.
 const { frameSize, framesPerColor, colors } = manifest as {
   frameSize: number;
   framesPerColor: number;

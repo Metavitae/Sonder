@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
@@ -18,39 +18,23 @@ import {
   useFaceLandmarkDetection,
   type FaceLandmarkDetectionResultBundle,
 } from "react-native-mediapipe";
-import { ProceduralMistPoC } from "../components/ProceduralMistPoC";
-import { VectorMistPoC } from "../components/VectorMistPoC";
-import { SpriteMistPoC } from "../components/SpriteMistPoC";
-import type { MistColor } from "../components/AmbientMist";
+import { SpriteMistPoC, type MistColor } from "../components/SpriteMistPoC";
 
-// AmbientMist's 2-slot expo-video crossfade (last untested option from the
-// four flagged 2026-08-06) was verified viable — see commit history. Per
-// "Sonder - Direct Instructions for CC (2026-08-11, Part 18)", the N=1/N=2
-// decoder-cliff finding rules out any approach that leans on MediaCodec for
-// more than one concurrent stream, so this screen now evaluates all three
-// MediaCodec-free alternatives: a pure procedural GPU shader
-// (ProceduralMistPoC), a Lottie vector animation (VectorMistPoC), and a
-// pre-rendered sprite atlas (SpriteMistPoC) — see each file for how it
-// avoids MediaCodec/video decode. Part 18's text describes testing them one
-// at a time, stopping early if one already looks solid; per the founder's
-// direct instruction (2026-08-13), all three are wired up together instead
-// so they can be compared live, in one on-device session, via the option
-// switcher below (MIST_OPTIONS/mistOption) before a single choice is
-// promoted into the rest of the app. TEMP_MIST_CYCLE drives color changes so
-// whichever option is active stays under continuous animation, not an idle
-// single-frame state — same real-condition methodology as every prior mist
-// test: real logcat signals with camera + MediaPipe running concurrently,
-// not a visual read.
-const TEMP_MIST_CYCLE: MistColor[] = ["violet", "cyan", "amber", "magenta", "blue"];
-const TEMP_MIST_CYCLE_MS = 3000;
-
-type MistOption = "shader" | "lottie" | "sprite";
-
-const MIST_OPTIONS: { id: MistOption; label: string }[] = [
-  { id: "shader", label: "1. Shader" },
-  { id: "lottie", label: "2. Lottie" },
-  { id: "sprite", label: "3. Sprite" },
-];
+// Mist mechanism: settled 2026-08-13. Per "Sonder - Direct Instructions for
+// CC (2026-08-11, Part 18)" + Addendum, the N=1/N=2 decoder-cliff finding
+// ruled out any approach leaning on MediaCodec for more than one concurrent
+// stream, so AmbientMist's video crossfade was replaced. Three MediaCodec-
+// free alternatives (a procedural Skia shader, a Lottie vector animation,
+// and this pre-rendered sprite atlas) were built and compared live on the
+// OnePlus 8T; the founder picked the sprite atlas (SpriteMistPoC) as the
+// winner. The other two and AmbientMist are removed — see
+// SpriteMistPoC.tsx for why this option avoids both MediaCodec and Skia's
+// shader path entirely.
+//
+// No real mood-to-color mapping exists yet (still blocked per "Sonder -
+// Direct Instructions for CC 2026-08-10 Part 13" / Part 16) — this is a
+// static placeholder color until that's wired up.
+const DEFAULT_MIST_COLOR: MistColor = "violet";
 
 // De-risking PoC for the Kithe/Sonder "needs boundary" Level 1 sensing
 // mechanism (§9 of the Complete Reference): does an on-device pipeline that
@@ -67,6 +51,17 @@ const MIST_OPTIONS: { id: MistOption; label: string }[] = [
 // angle, lighting, or partial framing, with a repeated corrective haptic
 // buzz for as long as framing stays poor, silent once well-framed. It must
 // only ever reflect genuine tracking quality, never anything else.
+//
+// Per founder direct instruction (2026-08-13): the camera's live feed must
+// never be visible on screen — only the mist, always in front of a solid
+// black background. `blackBackdrop` below is an unconditionally opaque
+// full-screen layer sitting between the (still-running, still-mounted)
+// Camera and every mist/tint layer, so no gap or transparency in anything
+// drawn on top of it can ever let a camera pixel show through. The Camera
+// component still needs to be mounted with real layout bounds and
+// `isActive` for the frame processor to receive frames — vision-camera
+// delivers frames regardless of what's painted on top of its view, so
+// covering it visually doesn't affect tracking.
 const SHOW_DEBUG_OVERLAY = __DEV__;
 
 // Framing-quality threshold below which the user counts as "poorly framed."
@@ -120,20 +115,6 @@ export default function FaceSignatureTest({
   const hapticActiveRef = useRef(false);
   const hapticTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wellFramedSinceRef = useRef<number | null>(null);
-  // Addendum-only (see below): last time a quality trace was logged, and
-  // when the currently-scheduled haptic tick is expected to fire.
-  const lastQualityLogRef = useRef(0);
-  const tickScheduledAtRef = useRef<number | null>(null);
-
-  // Which of the three Part 18 options is currently on screen. A ref
-  // mirrors the state so the memoized tick()/onResults callbacks (stable
-  // identity, empty/minimal dep arrays) can tag their [part18] logs with
-  // the option under test without needing to be recreated every switch.
-  const [mistOption, setMistOption] = useState<MistOption>("shader");
-  const mistOptionRef = useRef<MistOption>("shader");
-  useEffect(() => {
-    mistOptionRef.current = mistOption;
-  }, [mistOption]);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
@@ -146,14 +127,11 @@ export default function FaceSignatureTest({
       clearTimeout(hapticTimeoutRef.current);
       hapticTimeoutRef.current = null;
     }
-    tickScheduledAtRef.current = null;
     // TEMPORARY trace log, unconditional (not gated on SHOW_DEBUG_OVERLAY —
     // preview/release builds run with __DEV__ false, and this is exactly
     // what's needed to confirm the Aug 9 late-stop fix on the next real
     // device pass via logcat). Remove once the fix is confirmed on-device.
-    console.log(
-      `[haptic] stop, q=${latestQualityRef.current.toFixed(2)} option=${mistOptionRef.current}`
-    );
+    console.log(`[haptic] stop, q=${latestQualityRef.current.toFixed(2)}`);
   }, []);
 
   // Repeated corrective buzz while poorly framed, silent once well-framed —
@@ -164,20 +142,6 @@ export default function FaceSignatureTest({
   // that started it).
   const tick = useCallback(() => {
     if (!hapticActiveRef.current) return;
-    const now = Date.now();
-    // Addendum requirement, per "Sonder - Direct Instructions for CC 2026-08-11
-    // Part 18 Addendum": the procedural shader is GPU/CPU work competing with
-    // MediaPipe on the same real thread budget, so a JS-thread stall it causes
-    // would show up here as this tick firing later than the delay it was
-    // actually scheduled for — a genuine haptic-response lag, distinct from
-    // the old MediaCodec decoder-contention bug (this path never touches
-    // MediaCodec, so that failure mode can't apply). tickScheduledAtRef is
-    // reset to null on any pause/stop so a resumed loop doesn't log a bogus
-    // drift spanning the pause itself.
-    if (tickScheduledAtRef.current !== null) {
-      const drift = now - tickScheduledAtRef.current;
-      console.log(`[part18] haptic tick drift=${drift}ms option=${mistOptionRef.current}`);
-    }
     const severity = Math.max(
       0,
       Math.min(1, 1 - latestQualityRef.current / WELL_FRAMED_THRESHOLD)
@@ -189,12 +153,11 @@ export default function FaceSignatureTest({
     );
     // TEMPORARY trace log — see stopHapticLoop's matching note.
     console.log(
-      `[haptic] buzz, q=${latestQualityRef.current.toFixed(2)} severity=${severity.toFixed(2)} option=${mistOptionRef.current}`
+      `[haptic] buzz, q=${latestQualityRef.current.toFixed(2)} severity=${severity.toFixed(2)}`
     );
     const delay =
       HAPTIC_MAX_INTERVAL_MS -
       severity * (HAPTIC_MAX_INTERVAL_MS - HAPTIC_MIN_INTERVAL_MS);
-    tickScheduledAtRef.current = now + delay;
     hapticTimeoutRef.current = setTimeout(tick, delay);
   }, []);
 
@@ -227,7 +190,6 @@ export default function FaceSignatureTest({
       clearTimeout(hapticTimeoutRef.current);
       hapticTimeoutRef.current = null;
     }
-    tickScheduledAtRef.current = null;
   }, []);
 
   useEffect(() => stopHapticLoop, [stopHapticLoop]);
@@ -259,22 +221,6 @@ export default function FaceSignatureTest({
     const clamped = Math.max(0, Math.min(1, frameScore));
     quality.value = withTiming(clamped, { duration: 350 });
     latestQualityRef.current = clamped;
-
-    // Addendum requirement, per "Sonder - Direct Instructions for CC 2026-08-11
-    // Part 18 Addendum": report actual quality-score behavior (steady vs.
-    // degraded) during the shader test window, not just render/crash status.
-    // Throttled to 2/sec (not full camera framerate) — enough to see a real
-    // trend on logcat without drowning it, matching the same real-condition
-    // rigor as the existing haptic trace logs.
-    const nowLog = Date.now();
-    if (nowLog - lastQualityLogRef.current >= 500) {
-      lastQualityLogRef.current = nowLog;
-      console.log(
-        `[part18] quality=${clamped.toFixed(2)} inference=${
-          result.inferenceTime !== undefined ? result.inferenceTime.toFixed(1) : "—"
-        }ms faces=${faces.length} option=${mistOptionRef.current}`
-      );
-    }
 
     if (cameraMode === "face" && clamped < WELL_FRAMED_THRESHOLD) {
       wellFramedSinceRef.current = null;
@@ -316,19 +262,6 @@ export default function FaceSignatureTest({
     if (device) solution.cameraDeviceChangeHandler(device);
   }, [solution, device]);
 
-  // TEMPORARY, evaluation-only: cycles the shader's color uniform every
-  // TEMP_MIST_CYCLE_MS so the PoC is under continuous change, not an idle
-  // steady-state. Remove once Part 18's three-option verdict lands.
-  const [mistColor, setMistColorState] = useState<MistColor>(TEMP_MIST_CYCLE[0]);
-  useEffect(() => {
-    let i = 0;
-    const id = setInterval(() => {
-      i = (i + 1) % TEMP_MIST_CYCLE.length;
-      setMistColorState(TEMP_MIST_CYCLE[i]);
-    }, TEMP_MIST_CYCLE_MS);
-    return () => clearInterval(id);
-  }, []);
-
   const mistStyle = useAnimatedStyle(() => ({
     opacity: 0.75 - quality.value * 0.55,
     backgroundColor: quality.value > 0.5 ? "#3a2c52" : "#0d1a2b",
@@ -358,30 +291,12 @@ export default function FaceSignatureTest({
           onOutputOrientationChanged={solution.cameraOrientationChangedHandler}
         />
       )}
+      <View style={styles.blackBackdrop} pointerEvents="none" />
       <Animated.View
         style={[StyleSheet.absoluteFillObject, mistStyle]}
         pointerEvents="none"
       />
-      {mistOption === "shader" && <ProceduralMistPoC color={mistColor} />}
-      {mistOption === "lottie" && <VectorMistPoC color={mistColor} />}
-      {mistOption === "sprite" && <SpriteMistPoC color={mistColor} />}
-      <View style={styles.testHarnessLabel} pointerEvents="box-none">
-        <Text style={styles.hudText}>TEMP: Part 18 comparison — tap to switch</Text>
-        <View style={styles.optionRow}>
-          {MIST_OPTIONS.map((opt) => (
-            <Pressable
-              key={opt.id}
-              onPress={() => setMistOption(opt.id)}
-              style={[
-                styles.optionButton,
-                opt.id === mistOption && styles.optionButtonActive,
-              ]}
-            >
-              <Text style={styles.hudText}>{opt.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      <SpriteMistPoC color={DEFAULT_MIST_COLOR} />
       {SHOW_DEBUG_OVERLAY && (
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>live signature — nothing recorded</Text>
@@ -404,6 +319,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#111" },
   info: { color: "#eee", fontSize: 16 },
+  blackBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
   hud: {
     position: "absolute",
     top: 48,
@@ -415,21 +331,4 @@ const styles = StyleSheet.create({
   },
   hudTitle: { color: "#7CFFB2", fontWeight: "700", marginBottom: 6 },
   hudText: { color: "#F0E6FF", fontSize: 13 },
-  testHarnessLabel: {
-    position: "absolute",
-    bottom: 24,
-    left: 16,
-    right: 16,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    padding: 8,
-    borderRadius: 8,
-  },
-  optionRow: { flexDirection: "row", marginTop: 8, gap: 8 },
-  optionButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  optionButtonActive: { backgroundColor: "rgba(124,255,178,0.35)" },
 });
