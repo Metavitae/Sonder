@@ -1,0 +1,11 @@
+{
+  "frameSize": 96,
+  "framesPerColor": 12,
+  "colors": [
+    "violet",
+    "magenta",
+    "cyan",
+    "amber",
+    "blue"
+  ]
+}
