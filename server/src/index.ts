@@ -1,6 +1,29 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply } from "./groq.js";
+import { generateReply, type ChatTurn } from "./groq.js";
+
+// Server-side cap on how much history a single request can carry — a
+// safeguard against unbounded token/cost growth from a buggy or malicious
+// client, not something the product design asked for. Well above what a
+// real conversation screen would realistically send in one turn.
+const MAX_HISTORY_TURNS = 40;
+
+function parseHistory(value: unknown): ChatTurn[] {
+  if (!Array.isArray(value)) return [];
+  const turns: ChatTurn[] = [];
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === "object" &&
+      (item.role === "user" || item.role === "sonder") &&
+      typeof item.text === "string" &&
+      item.text.trim().length > 0
+    ) {
+      turns.push({ role: item.role, text: item.text });
+    }
+  }
+  return turns.slice(-MAX_HISTORY_TURNS);
+}
 
 const app = express();
 app.use(express.json());
@@ -22,10 +45,13 @@ app.post("/chat", async (req, res) => {
     res.status(400).json({ error: "message (non-empty string) is required" });
     return;
   }
+  const history = parseHistory(req.body?.history);
   try {
+    // Retrieval keys off the current message only, not history — see
+    // groq.ts's comment on generateReply for why.
     const examples = await retrieveTopExamples(message);
-    const reply = await generateReply(message, examples);
-    res.json({ reply, retrievedExampleIds: examples.map((e) => e.id) });
+    const { reply, mood } = await generateReply(message, history, examples);
+    res.json({ reply, mood, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });

@@ -35,14 +35,56 @@ function formatExample(ex: LibraryExample): string {
   return lines.join("\n");
 }
 
+export type Warmth = "warm" | "cool" | "neutral";
+export type Arousal = "low" | "med" | "high";
+export type Mood = { warmth: Warmth; arousal: Arousal };
+export type ChatTurn = { role: "user" | "sonder"; text: string };
+
+const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
+
+// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 21 Addendum":
+// same mood-tag convention as the earlier HTML prototype (Part 13's doc) —
+// the model ends each reply with an invisible tag, parsed and stripped
+// server-side (never shown to the client, same "raw mechanism stays
+// server/dev-side" discipline as the rest of this project) to drive the
+// mist's color/pulse. Exact tag syntax wasn't specified anywhere prior —
+// [[mood:WARMTH:AROUSAL]] on its own trailing line, chosen for being both
+// easy for the model to reproduce exactly and trivial to regex out.
+const MOOD_TAG_INSTRUCTION =
+  "After your reply, on its own new line, append exactly one tag in this " +
+  "form: [[mood:WARMTH:AROUSAL]] — WARMTH is one of warm/cool/neutral, " +
+  "AROUSAL is one of low/med/high, reflecting the emotional tone of your " +
+  "own reply. This tag is invisible to the user; it will be stripped " +
+  "before display, so always include it exactly in this format.";
+
+const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]\s*$/i;
+
+function extractMood(raw: string): { reply: string; mood: Mood } {
+  const match = raw.match(MOOD_TAG_RE);
+  if (!match) {
+    // Not a hard failure — the chat still works, just without a mood
+    // signal for that turn. Logged so a consistently-missing tag (e.g. the
+    // model ignoring the instruction) is visible in Render's logs.
+    console.warn("[mood] no tag found in reply, defaulting:", raw.slice(-80));
+    return { reply: raw.trim(), mood: DEFAULT_MOOD };
+  }
+  const warmth = match[1].toLowerCase() as Warmth;
+  const arousal = match[2].toLowerCase() as Arousal;
+  return { reply: raw.slice(0, match.index).trim(), mood: { warmth, arousal } };
+}
+
 // Per "Sonder - Example-Library Retrieval Scope and Mechanism (canonical
 // 2026-08-09)": retrieval happens server-side, right before the Groq call —
 // pulls the closest-matching examples and feeds them into the prompt as
-// guidance, not as text the model should quote verbatim.
+// guidance, not as text the model should quote verbatim. Retrieval keys off
+// the current message only, per that doc's "reads the moment's tone" —
+// history (added per Part 21 Addendum) is conversational context for the
+// model, not part of what the retrieval query embeds.
 export async function generateReply(
   message: string,
+  history: ChatTurn[],
   retrievedExamples: LibraryExample[]
-): Promise<string> {
+): Promise<{ reply: string; mood: Mood }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
   const completion = await getClient().chat.completions.create({
@@ -55,13 +97,20 @@ export async function generateReply(
           "this moment — let them guide your tone, register, and technique. " +
           "Never quote them verbatim; the current message is a different " +
           "situation even when the shape is similar.\n\n" +
-          groundingBlock,
+          groundingBlock +
+          "\n\n" +
+          MOOD_TAG_INSTRUCTION,
       },
+      ...history.map((turn) => ({
+        role: (turn.role === "user" ? "user" : "assistant") as "user" | "assistant",
+        content: turn.text,
+      })),
       { role: "user", content: message },
     ],
   });
 
-  return completion.choices[0]?.message?.content ?? "";
+  const raw = completion.choices[0]?.message?.content ?? "";
+  return extractMood(raw);
 }
 
 let client: Groq | null = null;

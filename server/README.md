@@ -29,9 +29,26 @@ cp .env.example .env   # fill in GROQ_API_KEY
 npm run dev
 ```
 
-`GET /health` — cheap, immediate, doesn't wait on the model. `POST /chat`
-with `{"message": "..."}` — retrieves grounding examples and returns a
-generated reply.
+`GET /health` — cheap, immediate, doesn't wait on the model.
+
+`POST /chat`:
+```
+// request
+{ "message": "...", "history"?: [{ "role": "user" | "sonder", "text": "..." }] }
+
+// response
+{
+  "reply": "...",
+  "mood": { "warmth": "warm" | "cool" | "neutral", "arousal": "low" | "med" | "high" },
+  "retrievedExampleIds": ["comfort-6", ...]
+}
+```
+`history` is optional context from prior turns in the conversation (capped
+server-side at 40 turns) — retrieval still keys off `message` alone, not
+history. `mood` comes from an invisible tag the model appends to its own
+reply (per "Sonder - Direct Instructions for CC 2026-08-14 Part 21
+Addendum"), parsed and stripped server-side — the client never sees the raw
+tag, only the parsed `mood` object.
 
 ## Deploying to Render
 
