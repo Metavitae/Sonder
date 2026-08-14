@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sonder-server
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.20.2
+      # Never committed — filled in by hand in Render's dashboard.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        sync: false

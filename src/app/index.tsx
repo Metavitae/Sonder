@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Link } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
@@ -298,6 +299,17 @@ export default function FaceSignatureTest({
       />
       <SpriteMistPoC color={DEFAULT_MIST_COLOR} />
       {SHOW_DEBUG_OVERLAY && (
+        // The cast is a stale-local-typegen workaround, not a real type
+        // hole: .expo/types/router.d.ts (gitignored, Metro-generated) only
+        // regenerates against a live dev server, so a route added without
+        // one running typechecks against a stale route union locally. The
+        // route itself (src/app/chat-test.tsx) is real and resolves fine
+        // at runtime regardless.
+        <Link href={"/chat-test" as never} style={styles.chatTestLink}>
+          chat-test →
+        </Link>
+      )}
+      {SHOW_DEBUG_OVERLAY && (
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>live signature — nothing recorded</Text>
           <Text style={styles.hudText}>faces: {facesDetected}</Text>
@@ -320,6 +332,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#111" },
   info: { color: "#eee", fontSize: 16 },
   blackBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
+  chatTestLink: {
+    position: "absolute",
+    bottom: 24,
+    right: 16,
+    color: "#7CFFB2",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    padding: 8,
+    borderRadius: 8,
+    fontSize: 13,
+  },
   hud: {
     position: "absolute",
     top: 48,
