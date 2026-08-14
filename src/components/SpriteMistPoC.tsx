@@ -28,18 +28,40 @@ const ATLAS_ROWS = colors.length;
 
 const FRAME_MS = 83; // ~12fps, matches the atlas's per-color loop cadence
 
-export function SpriteMistPoC({ color }: { color: MistColor }) {
+// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 21": mood
+// arousal drives the mist's "pulse" alongside its color. `intensity` (0-1)
+// scales the frame cadence — calmer moods drift slower, more aroused ones
+// cycle faster — mapped from arousal by moodToMist.ts, not decided here.
+// Optional and defaulting to the original fixed FRAME_MS so every existing
+// caller (index.tsx's face-tracking screen) is unaffected.
+const INTENSITY_MIN_MS = 160;
+const INTENSITY_MAX_MS = 50;
+
+function frameIntervalFor(intensity: number | undefined): number {
+  if (intensity === undefined) return FRAME_MS;
+  const clamped = Math.max(0, Math.min(1, intensity));
+  return INTENSITY_MIN_MS - clamped * (INTENSITY_MIN_MS - INTENSITY_MAX_MS);
+}
+
+export function SpriteMistPoC({
+  color,
+  intensity,
+}: {
+  color: MistColor;
+  intensity?: number;
+}) {
   const { width, height } = useWindowDimensions();
   const [frame, setFrame] = useState(0);
   const frameRef = useRef(0);
 
   useEffect(() => {
+    const intervalMs = frameIntervalFor(intensity);
     const id = setInterval(() => {
       frameRef.current = (frameRef.current + 1) % framesPerColor;
       setFrame(frameRef.current);
-    }, FRAME_MS);
+    }, intervalMs);
     return () => clearInterval(id);
-  }, []);
+  }, [intensity]);
 
   const row = Math.max(0, colors.indexOf(color));
   // Scale the atlas so one frame covers the full screen (full-bleed, same

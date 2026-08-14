@@ -298,17 +298,19 @@ export default function FaceSignatureTest({
         pointerEvents="none"
       />
       <SpriteMistPoC color={DEFAULT_MIST_COLOR} />
-      {SHOW_DEBUG_OVERLAY && (
+      {
+        // Always visible, not dev-gated — /chat is a real product surface
+        // now (Part 21), not a debug tool like chat-test.tsx (removed) was.
         // The cast is a stale-local-typegen workaround, not a real type
         // hole: .expo/types/router.d.ts (gitignored, Metro-generated) only
         // regenerates against a live dev server, so a route added without
         // one running typechecks against a stale route union locally. The
-        // route itself (src/app/chat-test.tsx) is real and resolves fine
-        // at runtime regardless.
-        <Link href={"/chat-test" as never} style={styles.chatTestLink}>
-          chat-test →
-        </Link>
-      )}
+        // route itself (src/app/chat.tsx) is real and resolves fine at
+        // runtime regardless.
+      }
+      <Link href={"/chat" as never} style={styles.chatLink}>
+        Talk to Sonder →
+      </Link>
       {SHOW_DEBUG_OVERLAY && (
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>live signature — nothing recorded</Text>
@@ -332,15 +334,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#111" },
   info: { color: "#eee", fontSize: 16 },
   blackBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
-  chatTestLink: {
+  chatLink: {
     position: "absolute",
     bottom: 24,
     right: 16,
     color: "#7CFFB2",
     backgroundColor: "rgba(0,0,0,0.55)",
-    padding: 8,
+    padding: 10,
     borderRadius: 8,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: "600",
   },
   hud: {
     position: "absolute",

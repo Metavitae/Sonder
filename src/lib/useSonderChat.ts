@@ -19,17 +19,35 @@ const COLD_START_REVEAL_MS = 1200;
 
 export type ChatMessage = { role: "user" | "sonder"; text: string };
 
+// Duplicated from server/src/groq.ts's Warmth/Arousal/Mood — client and
+// server are separate packages with no shared types module, and this is a
+// small enough contract that a shared package would be overhead the
+// project doesn't need yet. Keep both sides in sync by hand if this ever
+// changes (see server/README.md for the canonical contract doc).
+export type Warmth = "warm" | "cool" | "neutral";
+export type Arousal = "low" | "med" | "high";
+export type Mood = { warmth: Warmth; arousal: Arousal };
+
+const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
+
 export function useSonderChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWaiting, setIsWaiting] = useState(false);
   const [coldStartLine, setColdStartLine] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mood, setMood] = useState<Mood>(DEFAULT_MOOD);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const send = useCallback(async (text: string) => {
     if (!text.trim()) return;
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    // Captured before the state update below — the server's `history` is
+    // everything BEFORE this turn, and `message` is this turn itself.
+    let historyForRequest: ChatMessage[] = [];
+    setMessages((prev) => {
+      historyForRequest = prev;
+      return [...prev, { role: "user", text }];
+    });
     setIsWaiting(true);
     setColdStartLine(null);
 
@@ -46,11 +64,12 @@ export function useSonderChat() {
       const res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history: historyForRequest }),
       });
       if (!res.ok) throw new Error(`server responded ${res.status}`);
-      const data = (await res.json()) as { reply: string };
+      const data = (await res.json()) as { reply: string; mood?: Mood };
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
+      if (data.mood) setMood(data.mood);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -63,5 +82,5 @@ export function useSonderChat() {
     }
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, send };
+  return { messages, isWaiting, coldStartLine, error, mood, send };
 }
