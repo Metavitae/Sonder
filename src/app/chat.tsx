@@ -38,9 +38,18 @@ export default function ChatScreen() {
   return (
     <View style={styles.container}>
       <SpriteMistPoC color={color} intensity={intensity} />
+      {
+        // Real bug (founder report, Part 24): `behavior: undefined` on
+        // Android means KeyboardAvoidingView is a complete no-op there,
+        // leaving the input reachability entirely up to the Activity's
+        // adjustResize mode — which wasn't reliably keeping the input row
+        // visible above the keyboard on real hardware, matching "keyboard
+        // almost unaccessible." "height" actively resizes this view's
+        // content when the keyboard opens instead of trusting that alone.
+      }
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           {messages.map((m, i) => (

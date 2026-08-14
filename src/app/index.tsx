@@ -116,6 +116,20 @@ export default function FaceSignatureTest({
   const hapticActiveRef = useRef(false);
   const hapticTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wellFramedSinceRef = useRef<number | null>(null);
+  // Real bug found 2026-08-14 (founder report, Part 24): navigating away to
+  // /chat, the haptic tremor kept buzzing indefinitely — chat.tsx has no
+  // camera/haptic code at all, so it couldn't be that screen running
+  // face-tracking it shouldn't. The actual cause: react-native-vision-
+  // camera's frame processor runs on a native thread that isn't guaranteed
+  // to stop the instant this component unmounts — a frame already in
+  // flight can still call onResults→startHapticLoop() after unmount's
+  // cleanup (stopHapticLoop) has already run. Once that happens, nothing
+  // can ever stop it again — the cleanup effect only fires once, so an
+  // orphaned setTimeout-chained tick() loop runs forever, matching
+  // "doesn't stop" exactly (not just a longer tail than expected). Guard:
+  // bail at the very top of onResults once unmounted, so a late-arriving
+  // native callback is a genuine no-op instead of reviving the loop.
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
@@ -193,9 +207,16 @@ export default function FaceSignatureTest({
     }
   }, []);
 
-  useEffect(() => stopHapticLoop, [stopHapticLoop]);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      stopHapticLoop();
+    };
+  }, [stopHapticLoop]);
 
   const onResults = useCallback((result: FaceLandmarkDetectionResultBundle) => {
+    if (!isMountedRef.current) return;
     const faces = result.results ?? [];
     setFacesDetected(faces.length);
     setInferenceMs(result.inferenceTime ?? null);

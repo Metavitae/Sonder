@@ -30,6 +30,23 @@ export type Mood = { warmth: Warmth; arousal: Arousal };
 
 const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
+type ChatResponse = { reply: string; mood?: Mood };
+
+async function requestChat(text: string, history: ChatMessage[]): Promise<ChatResponse> {
+  if (!API_BASE_URL) {
+    throw new Error(
+      "EXPO_PUBLIC_SONDER_API_URL is not set — point it at the deployed Render service"
+    );
+  }
+  const res = await fetch(`${API_BASE_URL}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: text, history }),
+  });
+  if (!res.ok) throw new Error(`server responded ${res.status}`);
+  return (await res.json()) as ChatResponse;
+}
+
 export function useSonderChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWaiting, setIsWaiting] = useState(false);
@@ -37,6 +54,10 @@ export function useSonderChat() {
   const [error, setError] = useState<string | null>(null);
   const [mood, setMood] = useState<Mood>(DEFAULT_MOOD);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set true the moment the cold-start line actually reveals — i.e. this
+  // specific request has already run past COLD_START_REVEAL_MS, a genuine
+  // signal (not a guess) that this is a real cold-start wait.
+  const coldStartFiredRef = useRef(false);
 
   const send = useCallback(async (text: string) => {
     if (!text.trim()) return;
@@ -50,24 +71,30 @@ export function useSonderChat() {
     });
     setIsWaiting(true);
     setColdStartLine(null);
+    coldStartFiredRef.current = false;
 
     revealTimerRef.current = setTimeout(() => {
+      coldStartFiredRef.current = true;
       setColdStartLine(pickColdStartMessage());
     }, COLD_START_REVEAL_MS);
 
     try {
-      if (!API_BASE_URL) {
-        throw new Error(
-          "EXPO_PUBLIC_SONDER_API_URL is not set — point it at the deployed Render service"
-        );
+      let data: ChatResponse;
+      try {
+        data = await requestChat(text, historyForRequest);
+      } catch (firstErr) {
+        // Real bug found 2026-08-14 (founder's first live test, Part 24):
+        // a 500 on the very first send, not reproducible afterward with
+        // identical content — points to Render's free-tier first-request-
+        // after-sleep instability (the container can still be finishing
+        // initialization even after health checks pass), not a
+        // deterministic code bug. One automatic retry, but ONLY when we
+        // know this was a genuine cold-start wait (coldStartFiredRef) —
+        // an ordinary fast failure (bad input, a real server bug) should
+        // still surface immediately, not be masked by a silent retry.
+        if (!coldStartFiredRef.current) throw firstErr;
+        data = await requestChat(text, historyForRequest);
       }
-      const res = await fetch(`${API_BASE_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: historyForRequest }),
-      });
-      if (!res.ok) throw new Error(`server responded ${res.status}`);
-      const data = (await res.json()) as { reply: string; mood?: Mood };
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
       if (data.mood) setMood(data.mood);
     } catch (err) {

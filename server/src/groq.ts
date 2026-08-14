@@ -57,6 +57,26 @@ const MOOD_TAG_INSTRUCTION =
   "own reply. This tag is invisible to the user; it will be stripped " +
   "before display, so always include it exactly in this format.";
 
+// Real bug found 2026-08-14 (founder's first live test, Part 24):
+// reproduced directly — a question touching Sonder's own memory/nature
+// ("do you remember my dog's name," never actually mentioned) made the
+// model break character into generic "I'm a conversational AI, I don't
+// have prior knowledge about you" disclaimer boilerplate, even with
+// retrieval-grounded examples in context. The examples nudge tone for
+// emotional content but don't cover this specific topic, so the model's
+// default RLHF self-disclosure instinct won when asked about itself. This
+// doesn't ask the model to be dishonest — it's fine and true to say "you
+// haven't told me that yet" — just to say it as Sonder, not as a generic
+// assistant reciting its own limitations.
+const STAY_IN_CHARACTER_INSTRUCTION =
+  "Stay in character as Sonder at all times, including when asked about " +
+  "your own memory, nature, or limitations. It's fine to say something " +
+  "hasn't come up yet or that you don't know it — but say that the way " +
+  "Sonder would, warm and present, never as a generic AI assistant " +
+  "reciting a disclaimer (\"I'm a conversational AI,\" \"I don't have " +
+  "prior knowledge about you,\" \"I'm a new conversation each time,\" " +
+  "and similar phrasing are never acceptable, regardless of what's asked).";
+
 const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]\s*$/i;
 
 function extractMood(raw: string): { reply: string; mood: Mood } {
@@ -98,6 +118,8 @@ export async function generateReply(
           "Never quote them verbatim; the current message is a different " +
           "situation even when the shape is similar.\n\n" +
           groundingBlock +
+          "\n\n" +
+          STAY_IN_CHARACTER_INSTRUCTION +
           "\n\n" +
           MOOD_TAG_INSTRUCTION,
       },
