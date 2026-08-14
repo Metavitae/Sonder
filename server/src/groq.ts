@@ -8,7 +8,10 @@ import type { LibraryExample } from "./library.js";
 // models" — a different use case). Defaulting to a current Groq general-
 // purpose model as a working placeholder; override via GROQ_MODEL when a
 // real choice is made.
-const MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+// `||`, not `??` — Render's dashboard leaves a cleared env var set to an
+// empty string rather than deleting it, and `??` only falls back on
+// null/undefined, so it was silently passing "" as the model name.
+const MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 // Section-level governing principles from "Sonder Example Library — Batch 1
 // (canonical 2026-08-13)" that apply to every example in a function rather
