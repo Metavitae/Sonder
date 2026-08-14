@@ -28,12 +28,7 @@ app.post("/chat", async (req, res) => {
     res.json({ reply, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
-    // TEMPORARY: leaking the real error message to diagnose the first live
-    // deploy failure without needing Render dashboard log access. Revert to
-    // a generic message once diagnosed — this is a private pre-launch
-    // service, not a public API, but still shouldn't leak internals
-    // long-term.
-    res.status(500).json({ error: "generation failed", detail: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "generation failed" });
   }
 });
 
