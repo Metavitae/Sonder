@@ -40,11 +40,27 @@ function speakViaOrpheus(
 
     const timer = setTimeout(() => {
       // Never actually started — treat as a real failure, not just slow.
+      // Real bug found 2026-08-17 (Part 32 crisis-tripwire verification):
+      // on a cold Render free-tier instance, the request can still be
+      // mid-flight well past this timeout and start playing anyway much
+      // later (observed: ~35s after send) unless explicitly paused —
+      // remove() alone didn't reliably stop an in-flight native buffer
+      // from eventually transitioning to playing, so a late arrival could
+      // speak right over whatever the native fallback (below) had already
+      // said. pause() first, then remove().
+      player.pause();
       player.remove();
       finish(false);
     }, ORPHEUS_START_TIMEOUT_MS);
 
     player.addListener("playbackStatusUpdate", (status) => {
+      if (settled) {
+        // Arrived after we already gave up on this call (the slow-cold-
+        // start case above) — don't let it start playing over whatever's
+        // already speaking instead.
+        if (status.playing) player.pause();
+        return;
+      }
       if (status.playing) finish(true);
       if (status.didJustFinish) player.remove();
     });

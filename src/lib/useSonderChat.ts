@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
+import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
 import type { Presence } from "./motion";
 
 // Set by the founder once the Render service exists — see server/README.md.
@@ -87,6 +88,23 @@ export function useSonderChat() {
   ) => {
     if (!text.trim()) return;
     setError(null);
+
+    // Per "Kithe - Sonder's Complete Reference" §7 (Crisis Protocol) and
+    // "Sonder - Direct Instructions for CC 2026-08-17 Part 32" — runs
+    // first, on-device, before anything else touches this message: no
+    // network call, no LLM, regardless of tier, permissions, or onboarding
+    // stage. See crisisTripwire.ts for scope/rationale. useSpeakReplies
+    // (chat.tsx) picks this reply up the same way as any other — no extra
+    // wiring needed for it to be spoken, not just displayed.
+    if (isCrisisMessage(text)) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", text },
+        { role: "sonder", text: CRISIS_RESPONSE },
+      ]);
+      return;
+    }
+
     // Captured before the state update below — the server's `history` is
     // everything BEFORE this turn, and `message` is this turn itself.
     let historyForRequest: ChatMessage[] = [];
