@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
+import type { Presence } from "./motion";
 
 // Set by the founder once the Render service exists — see server/README.md.
 // EXPO_PUBLIC_ vars are inlined at bundle time (Expo convention), so this
@@ -32,16 +33,36 @@ const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
 type ChatResponse = { reply: string; mood?: Mood };
 
-async function requestChat(text: string, history: ChatMessage[]): Promise<ChatResponse> {
+async function requestChat(
+  text: string,
+  history: ChatMessage[],
+  openingPresence?: Presence,
+  headphonesConnected?: boolean
+): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
       "EXPO_PUBLIC_SONDER_API_URL is not set — point it at the deployed Render service"
     );
   }
+  const body: Record<string, unknown> = { message: text, history };
+  // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 9 —
+  // only meaningful as an "opening" signal, so only ever sent on the first
+  // turn of a session (history.length === 0 in send(), below) and only once
+  // the rolling window has actually settled on a real reading ("unknown"
+  // isn't a signal worth biasing tone on).
+  if (openingPresence && openingPresence !== "unknown") {
+    body.presence = openingPresence;
+  }
+  // Per Part 22/25 item 4 — unlike presence, this is an ongoing state, not
+  // an opening-only one: sent on every turn while headphones stay
+  // connected, not just the first.
+  if (headphonesConnected) {
+    body.headphones = true;
+  }
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: text, history }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`server responded ${res.status}`);
   return (await res.json()) as ChatResponse;
@@ -59,7 +80,11 @@ export function useSonderChat() {
   // signal (not a guess) that this is a real cold-start wait.
   const coldStartFiredRef = useRef(false);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (
+    text: string,
+    openingPresence?: Presence,
+    headphonesConnected?: boolean
+  ) => {
     if (!text.trim()) return;
     setError(null);
     // Captured before the state update below — the server's `history` is
@@ -81,7 +106,7 @@ export function useSonderChat() {
     try {
       let data: ChatResponse;
       try {
-        data = await requestChat(text, historyForRequest);
+        data = await requestChat(text, historyForRequest, openingPresence, headphonesConnected);
       } catch (firstErr) {
         // Real bug found 2026-08-14 (founder's first live test, Part 24):
         // a 500 on the very first send, not reproducible afterward with
@@ -93,7 +118,7 @@ export function useSonderChat() {
         // an ordinary fast failure (bad input, a real server bug) should
         // still surface immediately, not be masked by a silent retry.
         if (!coldStartFiredRef.current) throw firstErr;
-        data = await requestChat(text, historyForRequest);
+        data = await requestChat(text, historyForRequest, openingPresence, headphonesConnected);
       }
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
       if (data.mood) setMood(data.mood);
