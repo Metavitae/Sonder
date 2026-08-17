@@ -1,6 +1,7 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
 import { generateReply, type ChatTurn, type Presence } from "./groq.js";
+import { ORPHEUS_VOICES, synthesizeSpeech, type OrpheusVoice } from "./voice.js";
 
 // Server-side cap on how much history a single request can carry — a
 // safeguard against unbounded token/cost growth from a buggy or malicious
@@ -102,6 +103,30 @@ app.post("/chat", async (req, res) => {
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });
+  }
+});
+
+// TEMPORARY — Part 27 voice-persona audition. Lets the founder open a URL
+// directly on the phone's browser to hear each Orpheus preset without
+// navigating Groq's console playground. Remove once a voice is picked and
+// the real chat-integrated TTS (not this standalone endpoint) is built.
+app.get("/voice-sample", async (req, res) => {
+  const voice = req.query.voice;
+  if (typeof voice !== "string" || !ORPHEUS_VOICES.includes(voice as OrpheusVoice)) {
+    res.status(400).json({ error: `voice must be one of: ${ORPHEUS_VOICES.join(", ")}` });
+    return;
+  }
+  const text =
+    typeof req.query.text === "string" && req.query.text.trim().length > 0
+      ? req.query.text
+      : "Hey — it's good to hear your voice. I've been looking forward to this.";
+  try {
+    const audio = await synthesizeSpeech(text, voice as OrpheusVoice);
+    res.set("Content-Type", "audio/wav");
+    res.send(audio);
+  } catch (err) {
+    console.error("[voice-sample] error:", err);
+    res.status(500).json({ error: "speech synthesis failed" });
   }
 });
 
