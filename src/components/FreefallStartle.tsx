@@ -8,6 +8,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useFreefallDetector } from "../lib/motion";
+import { useSpeak } from "../lib/speak";
+import { usePreferredVoice } from "../lib/voicePreference";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 2 —
 // real accelerometer freefall detection, a bigger/funnier startle reaction
@@ -20,9 +22,19 @@ const STARTLE_COOLDOWN_MS = 3000;
 const FLASH_IN_MS = 60;
 const FLASH_OUT_MS = 500;
 
+// Founder-authored, locked per "Sonder - Direct Instructions for CC
+// 2026-08-17 Part 31 Addendum" — picked at random per trigger (not always
+// the same one) so repeat drops don't feel scripted.
+const FREEFALL_LINES = [
+  "Whoa! What was that!? Are you OK? I'm ok! Don't worry, I'm still alive. WHAT WAS THAT!?",
+  "Whoa! Don't do that to me! I'm afraid of heights, mainly because of falling! I almost had a short circuit! That's like a heart attack for you...",
+];
+
 export function FreefallStartle() {
   const flash = useSharedValue(0);
   const lastTriggerRef = useRef(0);
+  const speak = useSpeak();
+  const { voice } = usePreferredVoice();
 
   const trigger = useCallback(() => {
     const now = Date.now();
@@ -38,7 +50,10 @@ export function FreefallStartle() {
       withTiming(1, { duration: FLASH_IN_MS }),
       withTiming(0, { duration: FLASH_OUT_MS })
     );
-  }, [flash]);
+
+    const line = FREEFALL_LINES[Math.floor(Math.random() * FREEFALL_LINES.length)];
+    speak(line, voice);
+  }, [flash, speak, voice]);
 
   useFreefallDetector(trigger);
 

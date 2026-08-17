@@ -19,6 +19,7 @@ import { pickDreamLine, pickWakeLine } from "../lib/sleepBit";
 import { useHeadphonesConnected } from "../lib/audioRoute";
 import { usePreferredVoice, USER_VOICES } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
+import { useSpeak } from "../lib/speak";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
@@ -57,6 +58,14 @@ export default function ChatScreen() {
   // on it when this is the first turn of the session.
   const presence = usePresence();
 
+  // Per "Sonder - Voice Two-Phase Plan (canonical 2026-08-17)" Phase 1 —
+  // the user's pick, persisted across sessions (voicePreference.ts), not a
+  // fixed persona. Declared here (rather than down by useSpeakReplies)
+  // because the dream/wake effects below also need it, per Part 31 — those
+  // lines speak through the same pipeline as chat replies, not just text.
+  const { voice, setVoice } = usePreferredVoice();
+  const speak = useSpeak();
+
   // Item 6 — performed sleep/dreaming bit. `noteActivity` marks the moment
   // as real interaction (resets the idle clock, and if we were dreaming,
   // flags a genuine wake rather than just cancelling a near-miss).
@@ -66,16 +75,24 @@ export default function ChatScreen() {
   const dreamOverlay = useSharedValue(0);
 
   useEffect(() => {
-    if (isDreaming) setDreamLine(pickDreamLine());
+    if (isDreaming) {
+      const line = pickDreamLine();
+      setDreamLine(line);
+      speak(line, voice);
+    }
     dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDreaming, dreamOverlay]);
 
   useEffect(() => {
     if (!justWoke) return;
-    setWakeLine(pickWakeLine());
+    const line = pickWakeLine();
+    setWakeLine(line);
+    speak(line, voice);
     clearJustWoke();
     const id = setTimeout(() => setWakeLine(null), WAKE_LINE_DURATION_MS);
     return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justWoke, clearJustWoke]);
 
   const dreamOverlayStyle = useAnimatedStyle(() => ({ opacity: dreamOverlay.value }));
@@ -98,11 +115,9 @@ export default function ChatScreen() {
       ? intensity * HEADPHONES_INTENSITY_SCALE
       : intensity;
 
-  // Per "Sonder - Voice Two-Phase Plan (canonical 2026-08-17)" Phase 1 —
-  // the user's pick, persisted across sessions (voicePreference.ts), not a
-  // fixed persona. useSpeakReplies watches `messages` and speaks each new
-  // Sonder reply aloud in whichever voice is currently selected.
-  const { voice, setVoice } = usePreferredVoice();
+  // useSpeakReplies watches `messages` and speaks each new Sonder reply
+  // aloud in whichever voice is currently selected (voice/speak declared
+  // above, shared with the dream/wake lines).
   useSpeakReplies(messages, voice);
 
   const handleInputChange = (text: string) => {
