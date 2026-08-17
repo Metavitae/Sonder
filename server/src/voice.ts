@@ -10,6 +10,14 @@ const MODEL = "canopylabs/orpheus-v1-english";
 export const ORPHEUS_VOICES = ["autumn", "diana", "hannah", "austin", "daniel", "troy"] as const;
 export type OrpheusVoice = (typeof ORPHEUS_VOICES)[number];
 
+// Per founder decision 2026-08-17 (after listening to all six via
+// /voice-sample): the app offers exactly these two to end users, who pick
+// between them — not a single fixed persona, and not the full six-voice
+// set (those two were auditioned for fit, the other four were never meant
+// to be user-facing).
+export const USER_VOICES = ["autumn", "troy"] as const;
+export type UserVoice = (typeof USER_VOICES)[number];
+
 export async function synthesizeSpeech(text: string, voice: OrpheusVoice): Promise<Buffer> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY is not set");

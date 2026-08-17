@@ -1,7 +1,13 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
 import { generateReply, type ChatTurn, type Presence } from "./groq.js";
-import { ORPHEUS_VOICES, synthesizeSpeech, type OrpheusVoice } from "./voice.js";
+import {
+  ORPHEUS_VOICES,
+  synthesizeSpeech,
+  USER_VOICES,
+  type OrpheusVoice,
+  type UserVoice,
+} from "./voice.js";
 
 // Server-side cap on how much history a single request can carry — a
 // safeguard against unbounded token/cost growth from a buggy or malicious
@@ -106,10 +112,11 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// TEMPORARY — Part 27 voice-persona audition. Lets the founder open a URL
-// directly on the phone's browser to hear each Orpheus preset without
-// navigating Groq's console playground. Remove once a voice is picked and
-// the real chat-integrated TTS (not this standalone endpoint) is built.
+// Part 27 voice-persona audition — lets the founder open a URL directly on
+// the phone's browser to hear any of the six raw Orpheus presets, no
+// console navigation needed. Kept around (not just for the initial pick)
+// in case the founder wants to re-audition later; unlike /speak below, all
+// six voices are reachable here, not just the two picked for end users.
 app.get("/voice-sample", async (req, res) => {
   const voice = req.query.voice;
   if (typeof voice !== "string" || !ORPHEUS_VOICES.includes(voice as OrpheusVoice)) {
@@ -126,6 +133,34 @@ app.get("/voice-sample", async (req, res) => {
     res.send(audio);
   } catch (err) {
     console.error("[voice-sample] error:", err);
+    res.status(500).json({ error: "speech synthesis failed" });
+  }
+});
+
+// Real chat-integrated TTS — per founder decision 2026-08-17, the app
+// offers exactly two voices for the user to choose between (autumn,
+// troy), not the full six-preset set /voice-sample exposes for audition.
+// GET (not POST) deliberately: the client points an audio player straight
+// at this URL (createAudioPlayer({ uri })), which needs a plain fetchable
+// URL, not a request the client has to make and pipe through a file
+// itself.
+app.get("/speak", async (req, res) => {
+  const voice = req.query.voice;
+  if (typeof voice !== "string" || !USER_VOICES.includes(voice as UserVoice)) {
+    res.status(400).json({ error: `voice must be one of: ${USER_VOICES.join(", ")}` });
+    return;
+  }
+  const text = req.query.text;
+  if (typeof text !== "string" || text.trim().length === 0) {
+    res.status(400).json({ error: "text (non-empty string) is required" });
+    return;
+  }
+  try {
+    const audio = await synthesizeSpeech(text, voice as UserVoice);
+    res.set("Content-Type", "audio/wav");
+    res.send(audio);
+  } catch (err) {
+    console.error("[speak] error:", err);
     res.status(500).json({ error: "speech synthesis failed" });
   }
 });
