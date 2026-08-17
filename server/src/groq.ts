@@ -11,7 +11,12 @@ import type { LibraryExample } from "./library.js";
 // `||`, not `??` — Render's dashboard leaves a cleared env var set to an
 // empty string rather than deleting it, and `??` only falls back on
 // null/undefined, so it was silently passing "" as the model name.
-const MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+// Real bug found 2026-08-17 (Part 26, from Render's live logs): the
+// previous default, llama-3.3-70b-versatile, was fully removed from Groq's
+// API (404 model_not_found, not just deprecated) — confirmed against
+// console.groq.com/docs/models, which no longer lists it at all. Current
+// flagship general-purpose model per that same page: openai/gpt-oss-120b.
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 // Section-level governing principles from "Sonder Example Library — Batch 1
 // (canonical 2026-08-13)" that apply to every example in a function rather
@@ -77,6 +82,44 @@ const STAY_IN_CHARACTER_INSTRUCTION =
   "prior knowledge about you,\" \"I'm a new conversation each time,\" " +
   "and similar phrasing are never acceptable, regardless of what's asked).";
 
+// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22 Addendum",
+// item 10 — a language rule, not a sensor reaction: any low-battery/storage
+// notice must read as being about the user's convenience, never implying
+// Sonder itself has a stake in the device's power or storage state.
+const DEVICE_STATE_PHRASING_INSTRUCTION =
+  "If you ever reference the device's battery or storage level, frame it " +
+  "entirely around the user's convenience (e.g. \"your phone's getting " +
+  "low, might want to plug in\") — never imply that you have your own " +
+  "stake in the device's power or storage state.";
+
+// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22/25", item 9 —
+// held vs. set-down is a subtle, ongoing presence signal, not a triggered
+// gag (contrast item 2). Only meaningful as a bias on how the conversation
+// *opens* — the caller (index.ts) only ever passes this on a session's
+// first turn (empty history), so there's no "opening" concept to apply it
+// to on any later one.
+export type Presence = "held" | "set-down";
+
+const OPENING_PRESENCE_GUIDANCE: Record<Presence, string> = {
+  held:
+    "The user is actively holding their phone as this conversation opens — " +
+    "a deliberate, engaged gesture. Let your opening line be warm and " +
+    "present, matching that intent.",
+  "set-down":
+    "The phone was resting, not held, as this conversation opened — a more " +
+    "incidental, ambient start. Let your opening line be a touch calmer " +
+    "and less presumptive, without being cold.",
+};
+
+// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22/25", item 4 —
+// unlike item 9's opening-only presence, this is an ongoing state: applies
+// to every turn while headphones stay connected, not just the first.
+const HEADPHONES_GUIDANCE =
+  "The user currently has headphones connected — a quieter, more private " +
+  "moment than speaking through the phone's open speaker. Let your tone " +
+  "shift slightly toward that closeness: a touch quieter and more " +
+  "intimate, without naming or explaining the shift.";
+
 const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]\s*$/i;
 
 function extractMood(raw: string): { reply: string; mood: Mood } {
@@ -103,7 +146,9 @@ function extractMood(raw: string): { reply: string; mood: Mood } {
 export async function generateReply(
   message: string,
   history: ChatTurn[],
-  retrievedExamples: LibraryExample[]
+  retrievedExamples: LibraryExample[],
+  openingPresence?: Presence,
+  headphonesConnected?: boolean
 ): Promise<{ reply: string; mood: Mood }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
@@ -120,6 +165,10 @@ export async function generateReply(
           groundingBlock +
           "\n\n" +
           STAY_IN_CHARACTER_INSTRUCTION +
+          "\n\n" +
+          DEVICE_STATE_PHRASING_INSTRUCTION +
+          (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
+          (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
           "\n\n" +
           MOOD_TAG_INSTRUCTION,
       },
