@@ -160,17 +160,14 @@ app.get("/speak", async (req, res) => {
     res.set("Content-Type", "audio/wav");
     res.send(audio);
   } catch (err) {
+    // Root cause confirmed 2026-08-17 (Part 29): not a length bug —
+    // Groq's free/on-demand tier caps canopylabs/orpheus-v1-english at
+    // 3600 tokens per day (TPD), org-wide across every user and every
+    // test. A few voice replies exhausts it for the rest of the day.
+    // Real usage needs Groq's paid Dev Tier for a workable quota — a
+    // founder cost decision, not something fixable in code.
     console.error("[speak] error:", err);
-    // TEMPORARY error-detail leak — diagnosing Part 29's long-reply
-    // failure (real 500 confirmed via direct curl testing, cause
-    // unconfirmed without seeing Groq's actual response). Same technique
-    // already used and reverted once in this project (see git history:
-    // "Revert temporary error-detail leak now that GROQ_MODEL bug is
-    // fixed") — revert this the same way once the cause is confirmed.
-    res.status(500).json({
-      error: "speech synthesis failed",
-      detail: err instanceof Error ? err.message : String(err),
-    });
+    res.status(500).json({ error: "speech synthesis failed" });
   }
 });
 
