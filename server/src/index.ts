@@ -161,7 +161,16 @@ app.get("/speak", async (req, res) => {
     res.send(audio);
   } catch (err) {
     console.error("[speak] error:", err);
-    res.status(500).json({ error: "speech synthesis failed" });
+    // TEMPORARY error-detail leak — diagnosing Part 29's long-reply
+    // failure (real 500 confirmed via direct curl testing, cause
+    // unconfirmed without seeing Groq's actual response). Same technique
+    // already used and reverted once in this project (see git history:
+    // "Revert temporary error-detail leak now that GROQ_MODEL bug is
+    // fixed") — revert this the same way once the cause is confirmed.
+    res.status(500).json({
+      error: "speech synthesis failed",
+      detail: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
