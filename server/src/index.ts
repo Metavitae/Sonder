@@ -77,12 +77,18 @@ app.post("/chat", async (req, res) => {
   }
   const history = parseHistory(req.body?.history);
   // Per Part 22/25 item 9 — "opening" only means something on a session's
-  // actual first turn. Enforced here rather than trusted from the client:
-  // a stale/buggy client sending `presence` on a later turn should be
-  // silently ignored, not bias every reply in the conversation.
+  // actual first turn. Originally gated on history.length === 0, but Part
+  // 33's client-side persisted history means history is no longer empty on
+  // a fresh app launch — the client now tracks and reports its own
+  // sessionOpening flag (true only for the first send() since the app
+  // process started), which this still enforces server-side rather than
+  // trusting blindly: a stale/buggy client sending `presence` on a later
+  // turn should be silently ignored, not bias every reply in the
+  // conversation.
   const rawPresence = req.body?.presence;
+  const sessionOpening = req.body?.sessionOpening === true;
   const openingPresence: Presence | undefined =
-    history.length === 0 && (rawPresence === "held" || rawPresence === "set-down")
+    sessionOpening && (rawPresence === "held" || rawPresence === "set-down")
       ? rawPresence
       : undefined;
   // Per Part 22/25 item 4 — unlike presence, an ongoing state: honored on

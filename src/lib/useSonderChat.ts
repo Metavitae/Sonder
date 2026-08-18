@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
 import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
+import { loadStoredMessages, persistMessages } from "./chatHistory";
 import type { Presence } from "./motion";
 
 // Set by the founder once the Render service exists — see server/README.md.
@@ -37,6 +38,7 @@ type ChatResponse = { reply: string; mood?: Mood };
 async function requestChat(
   text: string,
   history: ChatMessage[],
+  sessionOpening: boolean,
   openingPresence?: Presence,
   headphonesConnected?: boolean
 ): Promise<ChatResponse> {
@@ -45,12 +47,14 @@ async function requestChat(
       "EXPO_PUBLIC_SONDER_API_URL is not set — point it at the deployed Render service"
     );
   }
-  const body: Record<string, unknown> = { message: text, history };
+  const body: Record<string, unknown> = { message: text, history, sessionOpening };
   // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 9 —
-  // only meaningful as an "opening" signal, so only ever sent on the first
-  // turn of a session (history.length === 0 in send(), below) and only once
-  // the rolling window has actually settled on a real reading ("unknown"
-  // isn't a signal worth biasing tone on).
+  // only meaningful as an "opening" signal. Originally gated server-side on
+  // history.length === 0, but Part 33's cross-session memory now restores
+  // prior history on launch, so that condition would never be true again
+  // after someone's first-ever session — silently killing this signal.
+  // sessionOpening (set in send(), below) tracks "first send since this
+  // app process launched" independently of how much history is loaded.
   if (openingPresence && openingPresence !== "unknown") {
     body.presence = openingPresence;
   }
@@ -80,6 +84,32 @@ export function useSonderChat() {
   // specific request has already run past COLD_START_REVEAL_MS, a genuine
   // signal (not a guess) that this is a real cold-start wait.
   const coldStartFiredRef = useRef(false);
+  // Part 33 — true only for the first send() call since this app process
+  // launched, regardless of how much persisted history got restored below.
+  // Distinct from historyForRequest.length === 0, which is no longer a
+  // reliable "first turn ever" signal now that history survives a restart.
+  const sessionOpeningRef = useRef(true);
+  // Guards the persist effect below so it never fires on the initial empty
+  // render (before loadStoredMessages() resolves) and overwrite real
+  // storage with [].
+  const hasLoadedHistoryRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadStoredMessages().then((stored) => {
+      if (cancelled) return;
+      if (stored.length > 0) setMessages(stored);
+      hasLoadedHistoryRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHistoryRef.current) return;
+    persistMessages(messages);
+  }, [messages]);
 
   const send = useCallback(async (
     text: string,
@@ -88,6 +118,8 @@ export function useSonderChat() {
   ) => {
     if (!text.trim()) return;
     setError(null);
+    const sessionOpening = sessionOpeningRef.current;
+    sessionOpeningRef.current = false;
 
     // Per "Kithe - Sonder's Complete Reference" §7 (Crisis Protocol) and
     // "Sonder - Direct Instructions for CC 2026-08-17 Part 32" — runs
@@ -124,7 +156,13 @@ export function useSonderChat() {
     try {
       let data: ChatResponse;
       try {
-        data = await requestChat(text, historyForRequest, openingPresence, headphonesConnected);
+        data = await requestChat(
+          text,
+          historyForRequest,
+          sessionOpening,
+          openingPresence,
+          headphonesConnected
+        );
       } catch (firstErr) {
         // Real bug found 2026-08-14 (founder's first live test, Part 24):
         // a 500 on the very first send, not reproducible afterward with
@@ -136,7 +174,13 @@ export function useSonderChat() {
         // an ordinary fast failure (bad input, a real server bug) should
         // still surface immediately, not be masked by a silent retry.
         if (!coldStartFiredRef.current) throw firstErr;
-        data = await requestChat(text, historyForRequest, openingPresence, headphonesConnected);
+        data = await requestChat(
+          text,
+          historyForRequest,
+          sessionOpening,
+          openingPresence,
+          headphonesConnected
+        );
       }
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
       if (data.mood) setMood(data.mood);
