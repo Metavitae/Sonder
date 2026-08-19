@@ -98,16 +98,28 @@ const STAY_IN_CHARACTER_INSTRUCTION =
 // This instruction is the direct, prompt-level fix; broadening the
 // library itself with non-probing examples is a separate content task
 // (already flagged, lower priority, in Part 33's "explicitly not now").
+// Strengthened 2026-08-18: a first, softer version of this instruction
+// (placed earlier in the prompt, right after the grounding block) had
+// zero measurable effect — 5/5 replayed replies to the same neutral
+// dog-walk anecdote still ended in a near-identical "How did it feel..."
+// question. Two changes made together: worded as a hard rule with a
+// concrete example of the exact failure to avoid (mirroring the real
+// reproduction), and moved to the very end of the system prompt — after
+// the grounding block and every other instruction — since later
+// instructions tend to carry more weight than earlier ones in a long
+// prompt. retrieveTopExamples() was also dropped from top-2 to top-1
+// (embeddings.ts) to halve the few-shot pressure toward this one shape.
 const RESPONSE_VARIETY_INSTRUCTION =
-  "The retrieved examples below model tone and warmth, not a literal " +
-  "template to repeat — do not treat 'reflect the content back, then ask " +
-  "a probing question about feelings' as the default reply shape. Match " +
-  "the actual weight of what was said: a light or funny anecdote earns a " +
-  "light reply, not the same reflective-question treatment as something " +
-  "heavy. Plenty of good replies are a short reaction, a bit of humor, a " +
-  "simple observation, or just listening — with no question at all. Ask " +
-  "how someone feels only when the moment genuinely calls for it, not as " +
-  "a reflex on every single turn.";
+  "Hard rule, overriding whatever pattern the retrieved example above " +
+  "seems to model: do not end this reply with a question unless the " +
+  "specific thing the user just said genuinely needs one to move the " +
+  "conversation forward. Most replies should NOT end in a question. " +
+  "Concretely, if a user shares a light or funny anecdote — e.g. a dog " +
+  "pulling them off balance on a walk — a good reply is a short, warm " +
+  "reaction with zero questions, not 'that sounds like a powerful " +
+  "moment... how did it feel?' Reserve probing feelings-questions for " +
+  "moments that are actually heavy or ambiguous, not as a reflex on " +
+  "every single turn regardless of content.";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22 Addendum",
 // item 10 — a language rule, not a sensor reaction: any low-battery/storage
@@ -279,13 +291,13 @@ export async function generateReply(
           "even when the shape is similar.\n\n" +
           groundingBlock +
           "\n\n" +
-          RESPONSE_VARIETY_INSTRUCTION +
-          "\n\n" +
           STAY_IN_CHARACTER_INSTRUCTION +
           "\n\n" +
           DEVICE_STATE_PHRASING_INSTRUCTION +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
+          "\n\n" +
+          RESPONSE_VARIETY_INSTRUCTION +
           "\n\n" +
           MOOD_TAG_INSTRUCTION,
       },

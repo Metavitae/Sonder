@@ -50,9 +50,18 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 // Query flow per the Aug 11 proposal: embed the message, cosine-similarity
 // against every in-memory library embedding, return only the top-K closest
 // matches (deliberately narrow — avoids prompt bloat and cost creep).
+// Dropped from 2 to 1 on 2026-08-18 (Part 34 item 2 investigation): every
+// row in the library ends its sonderLine with a probing feelings-question
+// (see library.ts's header comment), so injecting two of them per turn
+// doubled the few-shot pressure toward that one shape, regardless of
+// relevance — confirmed empirically: 5/5 replays to a neutral dog-walk
+// anecdote ended in a near-identical "How did it feel..." question even
+// after adding an explicit instruction against it. Halving the injected
+// examples is a direct lever on that pressure; groq.ts's
+// RESPONSE_VARIETY_INSTRUCTION is the complementary prompt-level fix.
 export async function retrieveTopExamples(
   message: string,
-  topK = 2
+  topK = 1
 ): Promise<LibraryExample[]> {
   const queryEmbedding = await embed(message);
   return [...libraryEmbeddings]
