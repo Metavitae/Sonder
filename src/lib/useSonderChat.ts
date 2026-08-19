@@ -93,10 +93,18 @@ export function useSonderChat() {
   // render (before loadStoredMessages() resolves) and overwrite real
   // storage with [].
   const hasLoadedHistoryRef = useRef(false);
+  // Real bug found 2026-08-18 (live on-device retest of Part 33, chasing
+  // Part 34 item 1): loadStoredMessages() is async, but nothing stopped
+  // send() from firing before it resolved — a message sent in that window
+  // captured historyForRequest from the still-empty initial `messages`
+  // state, went out with no context, and the model correctly (if
+  // unhelpfully) said it didn't know whatever the user had told it in a
+  // prior session. send() below awaits this so it can't race the load.
+  const loadPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadStoredMessages().then((stored) => {
+    loadPromiseRef.current = loadStoredMessages().then((stored) => {
       if (cancelled) return;
       if (stored.length > 0) setMessages(stored);
       hasLoadedHistoryRef.current = true;
@@ -135,6 +143,15 @@ export function useSonderChat() {
         { role: "sonder", text: CRISIS_RESPONSE },
       ]);
       return;
+    }
+
+    // Make sure persisted history has actually finished loading before
+    // capturing it as context below — see loadPromiseRef's comment above.
+    // A no-op after the first send of a session, since the load has
+    // almost always resolved by then; only matters in the narrow window
+    // right after a fresh launch.
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current;
     }
 
     // Captured before the state update below — the server's `history` is

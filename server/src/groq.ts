@@ -213,8 +213,22 @@ export async function generateReply(
 ): Promise<{ reply: string; mood: Mood }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
+  // Real bug found 2026-08-18 (Part 34 item 1 investigation): replaying the
+  // exact same message+history against the live model repeatedly showed
+  // it doesn't reliably recall facts already in context — no temperature
+  // was set here, so the call ran at the API default (effectively
+  // maximum randomness). Once a wrong "I don't remember X" reply happens
+  // even once, it gets persisted as real history and the model tends to
+  // stay consistent with its own prior statement on the next ask rather
+  // than re-attend to the earlier correct context — a single sampling
+  // miss becomes sticky. Lower temperature biases toward the
+  // highest-probability (better-grounded) continuation without flattening
+  // Sonder's voice entirely.
+  const TEMPERATURE = 0.6;
+
   const completion = await getClient().chat.completions.create({
     model: MODEL,
+    temperature: TEMPERATURE,
     messages: [
       {
         role: "system",
