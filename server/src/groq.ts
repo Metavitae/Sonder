@@ -82,6 +82,33 @@ const STAY_IN_CHARACTER_INSTRUCTION =
   "prior knowledge about you,\" \"I'm a new conversation each time,\" " +
   "and similar phrasing are never acceptable, regardless of what's asked).";
 
+// Real bug found 2026-08-18 ("Sonder - Direct Instructions for CC
+// 2026-08-18 Part 34" item 2 — founder: every reply reads as clinical and
+// repetitive, always probing for feelings regardless of what was said).
+// Root cause, confirmed by inspection: every one of the 25 retrieved-
+// example library rows (server/src/library.ts), across all four covered
+// functions, ends its sonderLine with a probing feelings-question — there
+// is no example anywhere that just reacts, jokes, or lands without one.
+// retrieveTopExamples() also has no similarity floor (embeddings.ts), so
+// two of these get injected on every single turn regardless of how
+// weakly they actually match — e.g. a neutral dog-walk anecdote still
+// pulls in Comfort/Challenge-style grounding. The examples were only ever
+// meant to model tone, but with 25/25 sharing one structural shape and no
+// counter-instruction, the model converged on that shape as a reflex.
+// This instruction is the direct, prompt-level fix; broadening the
+// library itself with non-probing examples is a separate content task
+// (already flagged, lower priority, in Part 33's "explicitly not now").
+const RESPONSE_VARIETY_INSTRUCTION =
+  "The retrieved examples below model tone and warmth, not a literal " +
+  "template to repeat — do not treat 'reflect the content back, then ask " +
+  "a probing question about feelings' as the default reply shape. Match " +
+  "the actual weight of what was said: a light or funny anecdote earns a " +
+  "light reply, not the same reflective-question treatment as something " +
+  "heavy. Plenty of good replies are a short reaction, a bit of humor, a " +
+  "simple observation, or just listening — with no question at all. Ask " +
+  "how someone feels only when the moment genuinely calls for it, not as " +
+  "a reflex on every single turn.";
+
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22 Addendum",
 // item 10 — a language rule, not a sensor reaction: any low-battery/storage
 // notice must read as being about the user's convenience, never implying
@@ -182,6 +209,15 @@ const CORE_FRAMEWORK_INSTRUCTION =
   "lingering guilt after a decline.";
 
 const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]\s*$/i;
+// Real bug found 2026-08-18 (live persisted data, investigating Part 34):
+// the model sometimes echoes MOOD_TAG_INSTRUCTION's own placeholder
+// tokens literally — "[[mood:WARMTH:MED]]" instead of substituting a real
+// value — so MOOD_TAG_RE's strict enum never matches and the raw broken
+// tag leaked straight into the user-visible reply. This looser pattern
+// only governs stripping (any [[mood:x:y]]-shaped tag, regardless of
+// whether x/y are recognized values) — it never gets used to set the
+// actual mood, which still only ever comes from a real enum match above.
+const ANY_MOOD_TAG_RE = /\[\[mood:[^\]]*\]\]\s*$/i;
 
 function extractMood(raw: string): { reply: string; mood: Mood } {
   const match = raw.match(MOOD_TAG_RE);
@@ -190,7 +226,8 @@ function extractMood(raw: string): { reply: string; mood: Mood } {
     // signal for that turn. Logged so a consistently-missing tag (e.g. the
     // model ignoring the instruction) is visible in Render's logs.
     console.warn("[mood] no tag found in reply, defaulting:", raw.slice(-80));
-    return { reply: raw.trim(), mood: DEFAULT_MOOD };
+    const strippedRaw = raw.replace(ANY_MOOD_TAG_RE, "").trim();
+    return { reply: strippedRaw, mood: DEFAULT_MOOD };
   }
   const warmth = match[1].toLowerCase() as Warmth;
   const arousal = match[2].toLowerCase() as Arousal;
@@ -241,6 +278,8 @@ export async function generateReply(
           "them verbatim; the current message is a different situation " +
           "even when the shape is similar.\n\n" +
           groundingBlock +
+          "\n\n" +
+          RESPONSE_VARIETY_INSTRUCTION +
           "\n\n" +
           STAY_IN_CHARACTER_INSTRUCTION +
           "\n\n" +
