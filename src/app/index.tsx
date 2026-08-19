@@ -234,12 +234,38 @@ export default function FaceSignatureTest({
     // comfortably inside the margin. This is the one thing derivable from
     // landmarks alone without reading anything about the user beyond "is the
     // camera seeing you well right now."
+    //
+    // Real bug found 2026-08-19 (Part 34 item 3 — founder: haptic fires even
+    // with face plainly in view, distinct from the Aug 17 thermal/slow-
+    // inference explanation). The original metric took the MIN across every
+    // one of MediaPipe's ~468 landmark points — a single peripheral point
+    // (ear, jaw contour, chin) drifting near an edge tanked the whole score
+    // to 0 regardless of how centered the actual face was. For a companion
+    // app where people naturally hold the phone close, jaw/ear/chin points
+    // routinely sit near the frame edge during completely normal framing —
+    // this was measuring "is the single worst point safely inside," not "is
+    // your face in view."
+    //
+    // First fix attempt (bounding-box center) over-corrected — founder
+    // confirmed live it stopped buzzing even when clearly out of frame. A
+    // pure center barely moves toward an edge until most of the face is
+    // actually gone, so it lost real sensitivity to genuine partial
+    // framing, not just noisy single-point jitter. This version instead
+    // trims only the noisiest ~10% of points (the same handful of jittery
+    // contour/extrapolated points causing the original bug) and uses the
+    // next-worst point as the score — still reacts as more of the face
+    // genuinely leaves frame (more points get close to an edge, moving the
+    // 10th-percentile point too), but one single outlier can no longer tank
+    // the whole score alone.
     const landmarks = faces[0]?.faceLandmarks?.[0] ?? [];
-    const frameScore = landmarks.length
-      ? Math.min(
-          ...landmarks.map((p) => Math.min(p.x, 1 - p.x, p.y, 1 - p.y) * 6)
-        )
-      : 0;
+    let frameScore = 0;
+    if (landmarks.length) {
+      const distances = landmarks
+        .map((p) => Math.min(p.x, 1 - p.x, p.y, 1 - p.y))
+        .sort((a, b) => a - b);
+      const trimIndex = Math.floor(distances.length * 0.1);
+      frameScore = distances[trimIndex] * 6;
+    }
     const clamped = Math.max(0, Math.min(1, frameScore));
     quality.value = withTiming(clamped, { duration: 350 });
     latestQualityRef.current = clamped;
