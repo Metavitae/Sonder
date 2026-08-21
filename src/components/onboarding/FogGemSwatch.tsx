@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { ClipPath, Defs, Image as SvgImage, Polygon } from "react-native-svg";
 import Animated, {
@@ -86,10 +86,23 @@ export function FogGemSwatch({
 
   const opacity = useSharedValue(UNSELECTED_OPACITY);
   const pulse = useSharedValue(1);
-  opacity.value = withTiming(selected ? 1 : UNSELECTED_OPACITY, { duration: 300 });
-  pulse.value = selected
-    ? withRepeat(withTiming(1.08, { duration: 1400 }), -1, true)
-    : withTiming(1, { duration: 300 });
+  // Real bug found 2026-08-20 (founder, Part 43 — live on-device retest):
+  // these were direct assignments in the render body, which Reanimated's
+  // strict mode flags as "writing to value during component render." Since
+  // this component re-renders on every mist-frame tick (useMistFrame's
+  // ~150ms setInterval), that meant every one of these animations was being
+  // torn down and restarted from scratch dozens of times a second, for all
+  // 10 gem swatches on screen at once — real render/JS-thread churn, the
+  // most likely actual cause of "tapping does nothing" (not that onPress
+  // was ignored, but that the app was too busy thrashing to respond).
+  // Gated in an effect keyed on `selected` so each animation only starts
+  // once, on an actual selection change.
+  useEffect(() => {
+    opacity.value = withTiming(selected ? 1 : UNSELECTED_OPACITY, { duration: 300 });
+    pulse.value = selected
+      ? withRepeat(withTiming(1.08, { duration: 1400 }), -1, true)
+      : withTiming(1, { duration: 300 });
+  }, [selected, opacity, pulse]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

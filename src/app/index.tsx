@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Link } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
@@ -107,6 +108,11 @@ export default function FaceSignatureTest({
   cameraMode?: CameraMode;
 }) {
   const { hasPermission, requestPermission } = useCameraPermission();
+  // Part 42 Bug 1 (founder, live on-device): both bottom-anchored links were
+  // rendering under the phone's on-screen nav bar — a fixed `bottom: 24`
+  // never accounted for the system inset this app's edge-to-edge rendering
+  // draws under.
+  const insets = useSafeAreaInsets();
   const [topCategories, setTopCategories] = useState<Category[]>([]);
   const [facesDetected, setFacesDetected] = useState(0);
   const [inferenceMs, setInferenceMs] = useState<number | null>(null);
@@ -355,9 +361,27 @@ export default function FaceSignatureTest({
         // route itself (src/app/chat.tsx) is real and resolves fine at
         // runtime regardless.
       }
-      <Link href={"/chat" as never} style={styles.chatLink}>
+      <Link
+        href={"/chat" as never}
+        style={[styles.chatLink, { bottom: insets.bottom + 24 }]}
+      >
         Talk to Sonder →
       </Link>
+      {
+        // TEMPORARY dev-only entry point for onboarding-rebuild step 5's
+        // live verification — the plan's real launch path is the root
+        // _layout.tsx redirect gate (build order step 8, not wired yet).
+        // Remove once that gate lands and makes this route reachable
+        // naturally on a fresh install.
+      }
+      {__DEV__ && (
+        <Link
+          href={"/onboarding/setup" as never}
+          style={[styles.onboardingDevLink, { bottom: insets.bottom + 24 }]}
+        >
+          Onboarding (dev) →
+        </Link>
+      )}
       {SHOW_DEBUG_OVERLAY && (
         <View style={styles.hud}>
           <Text style={styles.hudTitle}>live signature — nothing recorded</Text>
@@ -383,9 +407,18 @@ const styles = StyleSheet.create({
   blackBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
   chatLink: {
     position: "absolute",
-    bottom: 24,
     right: 16,
     color: "#7CFFB2",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    padding: 10,
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  onboardingDevLink: {
+    position: "absolute",
+    left: 16,
+    color: "#D4AF7A",
     backgroundColor: "rgba(0,0,0,0.55)",
     padding: 10,
     borderRadius: 8,
