@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -43,6 +44,8 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<OnboardingState>(DEFAULT_ONBOARDING_STATE);
   const [hydrated, setHydrated] = useState(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     let cancelled = false;
@@ -89,10 +92,20 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const promoteTier = useCallback(() => {
     setState((prev) => ({ ...prev, level2Decision: "shared", tier: prev.tier + 1 }));
   }, []);
-  const markComplete = useCallback(
-    () => setState((prev) => ({ ...prev, complete: true })),
-    []
-  );
+  // Writes to storage directly, not via the reactive persist effect above.
+  // Real bug found live (2026-08-24): intro.tsx calls markComplete() then
+  // immediately completeOnboardingGate() in the same handler, which flips
+  // the root layout's guard and unmounts OnboardingProvider in that same
+  // commit — before the persist effect ever got to run for the
+  // complete:true update. AsyncStorage never saw it (confirmed by reading
+  // the on-device database after a full walkthrough: complete stayed
+  // false despite chat.tsx rendering correctly). Firing the write here
+  // means it's in flight before anything can unmount.
+  const markComplete = useCallback(() => {
+    const next = { ...stateRef.current, complete: true };
+    persistOnboardingState(next);
+    setState(next);
+  }, []);
 
   const value = useMemo<OnboardingContextValue>(
     () => ({

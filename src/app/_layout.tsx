@@ -1,10 +1,11 @@
 import { LogBox } from "react-native";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
 import { loadOnboardingState } from "../lib/onboardingStorage";
+import { OnboardingGateContext } from "../lib/onboardingGate";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,12 +21,32 @@ export default function RootLayout() {
   // null = still loading — keep splash up rather than flashing index.tsx
   // before we know whether to redirect into onboarding (build order step 8).
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  // True only when completion happens live, this session (vs. already
+  // complete from a prior session at launch) — distinguishes "just
+  // finished onboarding, navigate to /chat" from "app opened already
+  // onboarded, stay on index.tsx as usual."
+  const justCompletedRef = useRef(false);
 
   useEffect(() => {
     loadOnboardingState().then((s) => {
       setOnboardingComplete(s.complete);
       SplashScreen.hideAsync();
     });
+  }, []);
+
+  // Runs after the guard flip above has committed and "chat" has re-entered
+  // the navigator, so this replace has a real target (see onboardingGate.ts
+  // for why a plain router.replace from intro.tsx can't do this directly).
+  useEffect(() => {
+    if (onboardingComplete && justCompletedRef.current) {
+      justCompletedRef.current = false;
+      router.replace("/chat");
+    }
+  }, [onboardingComplete]);
+
+  const completeOnboardingGate = useCallback(() => {
+    justCompletedRef.current = true;
+    setOnboardingComplete(true);
   }, []);
 
   if (onboardingComplete === null) return null;
@@ -44,17 +65,19 @@ export default function RootLayout() {
   // always mounted and both branches always declared, so gating never
   // tears down the router itself.
   return (
-    <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={onboardingComplete}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="chat" />
-        </Stack.Protected>
-        <Stack.Protected guard={!onboardingComplete}>
-          <Stack.Screen name="onboarding" />
-        </Stack.Protected>
-      </Stack>
-      <FreefallStartle />
-    </SafeAreaProvider>
+    <OnboardingGateContext.Provider value={completeOnboardingGate}>
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={onboardingComplete}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="chat" />
+          </Stack.Protected>
+          <Stack.Protected guard={!onboardingComplete}>
+            <Stack.Screen name="onboarding" />
+          </Stack.Protected>
+        </Stack>
+        <FreefallStartle />
+      </SafeAreaProvider>
+    </OnboardingGateContext.Provider>
   );
 }

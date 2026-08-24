@@ -1,11 +1,11 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { router } from "expo-router";
 
 import { IntroLogoReveal } from "../../components/onboarding/IntroLogoReveal";
 import { MistFormedText } from "../../components/onboarding/MistFormedText";
 import { TypingWell } from "../../components/onboarding/TypingWell";
 import { useOnboarding } from "../../lib/onboardingContext";
+import { useCompleteOnboardingGate } from "../../lib/onboardingGate";
 
 type Phase = "logo" | "text" | "typingWell";
 
@@ -16,6 +16,7 @@ type Phase = "logo" | "text" | "typingWell";
 // mounted at onboarding/_layout.tsx — no separate mist instance here.
 export default function IntroScreen() {
   const { markComplete } = useOnboarding();
+  const completeOnboardingGate = useCompleteOnboardingGate();
   const [phase, setPhase] = useState<Phase>("logo");
 
   const handleLogoComplete = useCallback(() => setPhase("text"), []);
@@ -24,9 +25,16 @@ export default function IntroScreen() {
     // Hard hand-off (plan §Component notes) — chat.tsx's own component
     // tree is never touched; the exchange already lives in chatHistory.ts
     // via TypingWell's use of the same useSonderChat pipeline.
+    //
+    // markComplete() persists to storage; completeOnboardingGate() flips
+    // the root layout's live guard state and performs the actual
+    // router.replace("/chat") once "chat" has re-entered the navigator —
+    // calling router.replace directly from here landed nowhere, since the
+    // root's Stack.Protected still excluded "chat" at that instant
+    // (confirmed live on-device, build order step 9).
     markComplete();
-    router.replace("/chat");
-  }, [markComplete]);
+    completeOnboardingGate();
+  }, [markComplete, completeOnboardingGate]);
 
   return (
     <View style={styles.container}>
