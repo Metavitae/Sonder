@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -77,67 +77,74 @@ export default function SetupScreen() {
   }
 
   return (
-    // Real regression found via on-device screenshot (2026-08-20): a
-    // non-scrolling fixed layout tried here earlier, to silence RN's
-    // VirtualizedLists-in-ScrollView warning, made the screen's actual
-    // content (2 gem pickers + Continue) taller than the viewport, with no
-    // way to reach the cut-off bottom — Continue was completely
-    // inaccessible. That's a hard functional break, worse than the console
-    // warning it was trying to avoid: the wheel picker's three FlatLists
-    // have at most 31 items each, far below where RN's windowing/recycling
-    // concern actually bites, so the warning is safe to accept here in
-    // exchange for a screen a user can actually reach the bottom of.
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 },
-      ]}
-    >
-      <Text style={styles.title}>When were you born?</Text>
-      <BirthdateWheelPicker value={birthdateValue} onChange={handleBirthdateChange} />
-      {!isAdult && <Text style={styles.gateText}>Sonder is for adults 18 and up.</Text>}
+    // Founder correction (2026-08-23): the page itself must not need
+    // scrolling — only the birthdate wheel's own internal scroll (that's
+    // its normal picker behavior) is acceptable. So this is a fixed,
+    // non-scrolling layout sized to fit in one screen; everything below is
+    // spacing tight enough to make that true rather than a ScrollView.
+    // Continue still sits in its own footer block (not mixed into the
+    // middle content) so its position is deterministic and always clear of
+    // the phone's nav bar, per Part 45's Bug 2 (verified live 2026-08-23).
+    //
+    // Real regression found via on-device screenshot (2026-08-20): an
+    // earlier non-scrolling attempt used the *same* generous spacing as a
+    // scrolling layout and ran taller than the viewport, making Continue
+    // unreachable. This version's fix is to actually shrink the spacing
+    // (title margins, inter-row gaps) to fit — not to reintroduce scrolling.
+    <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
+      <View style={styles.content}>
+        <Text style={styles.title}>When were you born?</Text>
+        <BirthdateWheelPicker value={birthdateValue} onChange={handleBirthdateChange} />
+        {!isAdult && <Text style={styles.gateText}>Sonder is for adults 18 and up.</Text>}
 
-      <Text style={styles.title}>What's your gender?</Text>
-      <FogGemPicker
-        options={USER_GENDER_OPTIONS}
-        selected={state.userColor}
-        onSelect={(color: MistColor) => setUserColor(color)}
-        idPrefix="user"
-      />
+        <Text style={styles.title}>What's your gender?</Text>
+        <FogGemPicker
+          options={USER_GENDER_OPTIONS}
+          selected={state.userColor}
+          onSelect={(color: MistColor) => setUserColor(color)}
+          idPrefix="user"
+        />
 
-      <Text style={styles.title}>What's Sonder's gender?</Text>
-      <FogGemPicker
-        options={SONDER_GENDER_OPTIONS}
-        selected={state.sonderColor}
-        onSelect={(color: MistColor) => setSonderColor(color)}
-        idPrefix="sonder"
-      />
+        <Text style={styles.title}>What's Sonder's gender?</Text>
+        <FogGemPicker
+          options={SONDER_GENDER_OPTIONS}
+          selected={state.sonderColor}
+          onSelect={(color: MistColor) => setSonderColor(color)}
+          idPrefix="sonder"
+        />
+      </View>
 
-      <Pressable
-        onPress={handleContinue}
-        disabled={!canContinue}
-        style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
-      >
-        <Text style={styles.continueText}>Continue</Text>
-      </Pressable>
-    </ScrollView>
+      <View style={styles.footer}>
+        <Pressable
+          onPress={handleContinue}
+          disabled={!canContinue}
+          style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
+        >
+          <Text style={styles.continueText}>Continue</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "space-between" },
   content: {
+    flex: 1,
     alignItems: "center",
-    gap: 20,
+    justifyContent: "space-evenly",
     paddingHorizontal: 24,
   },
-  title: { color: "#F0E6FF", fontSize: 18, fontWeight: "600", textAlign: "center", marginTop: 12 },
-  gateText: { color: "#ff8a8a", fontSize: 13, textAlign: "center", marginTop: -8 },
+  title: { color: "#F0E6FF", fontSize: 17, fontWeight: "600", textAlign: "center" },
+  gateText: { color: "#ff8a8a", fontSize: 12, textAlign: "center", marginTop: -6 },
+  footer: { alignItems: "center", paddingTop: 8, paddingHorizontal: 24 },
   continueButton: {
     backgroundColor: "#7CFFB2",
     borderRadius: 8,
     paddingHorizontal: 32,
     paddingVertical: 12,
-    marginTop: 16,
+    width: "100%",
+    alignItems: "center",
   },
   continueButtonDisabled: { backgroundColor: "rgba(124,255,178,0.3)" },
   continueText: { color: "#000", fontWeight: "700", fontSize: 15 },

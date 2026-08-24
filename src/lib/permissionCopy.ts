@@ -13,8 +13,12 @@ export const LEVEL1_BUTTON_SURE = "Sure";
 export const LEVEL1_BUTTON_NOT_NOW = "Not right now";
 
 // Level 2 is a separate screen/step — never blended into a Level 1 moment.
+// Scoped to Sonder's own use only (Part 45 Addendum, 2026-08-20): data
+// licensing to outside partners is currently inactive, so this must not
+// offer or imply sharing with "a few AIs we work with" until that revenue
+// stream is actually reactivated.
 export const LEVEL2_ASK =
-  "Want to help Sonder — and a few AIs we work with — get better? You choose what to share. Nothing that could identify you ever leaves your phone.";
+  "Want to help Sonder get better? You choose what to share. Nothing that could identify you ever leaves your phone.";
 export const LEVEL2_BUTTON_SEE_WHAT_THIS_MEANS = "See what this means";
 export const LEVEL2_BUTTON_SHARE = "Share";
 export const LEVEL2_BUTTON_NO_THANKS = "No thanks";
@@ -39,4 +43,4 @@ export const FAQ_TITLE = "What happens to what Sonder senses?";
 export const FAQ_LEVEL1_DEFAULT =
   "Everything's processed on your device. Sonder turns what it senses into a compressed signal — never raw video, audio, or photos — and that signal may help Sonder improve. Nothing identifiable ever leaves your phone.";
 export const FAQ_LEVEL2_OPTIONAL =
-  "The same kind of signal may also go to select partners helping build AI tools. Your identity is never included — no photos, no names, no contacts, no birthday. Choosing to share moves you up a tier automatically.";
+  "That signal helps Sonder itself improve. Your identity is never included — no photos, no names, no contacts, no birthday. Choosing to share moves you up a tier automatically.";

@@ -102,6 +102,7 @@ function WheelColumn({
       keyExtractor={(_, i) => String(i)}
       style={{ width }}
       showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
       snapToInterval={ITEM_HEIGHT}
       decelerationRate="fast"
       getItemLayout={(_, i) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * i, index: i })}
