@@ -75,9 +75,6 @@ export default function RootLayout() {
           <Stack.Protected guard={!onboardingComplete}>
             <Stack.Screen name="onboarding" />
           </Stack.Protected>
-          {/* TEMPORARY: dev-only isolation route for verifying sharing.tsx,
-              see src/app/dev-sharing.tsx. Delete both when done. */}
-          <Stack.Screen name="dev-sharing" />
         </Stack>
         <FreefallStartle />
       </SafeAreaProvider>
