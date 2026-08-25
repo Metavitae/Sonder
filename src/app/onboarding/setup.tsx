@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,6 +14,18 @@ import { useOnboarding } from "../../lib/onboardingContext";
 // touches the wheel isn't blocked by an unpicked date. Not a "default
 // birthdate" in any other sense.
 const DEFAULT_BIRTHDATE = new Date(2000, 0, 1);
+
+// Registration's email field (Part 52) — local-only per the founder's
+// scoping call (2026-08-25): no auth backend exists anywhere in this app,
+// so this is a format check, not real verification. Simple presence of an
+// "@" and a "." after it, same spirit as the rest of this screen's gating
+// (18+ date math, not a real ID check either).
+function isValidEmail(email: string): boolean {
+  const at = email.indexOf("@");
+  if (at <= 0) return false;
+  const dot = email.indexOf(".", at + 1);
+  return dot > at + 1 && dot < email.length - 1;
+}
 
 // Per the founder's direct correction (2026-08-20): these are gender
 // pickers, not a 5-color exhibit — Male/Female/Not specified for the user,
@@ -30,15 +42,17 @@ const SONDER_GENDER_OPTIONS: FogGemOption[] = [
   { color: "magenta", label: "Female" },
 ];
 
-// Stage 1 — per the founder's direct correction (2026-08-20, supersedes the
+// Registration (Part 52's name for this screen; still Stage 1 underneath) —
+// per the founder's direct correction (2026-08-20, supersedes the
 // crystal-lid opener): no lid at all. The screen opens straight into the
 // Kithe→Sonder fog/logo sequence, whose third fog pulse reveals the real
-// fields (18+ gate, two FogGemPickers). Continue is disabled until all
-// three answers are in; real navigation to Stage 5 happens only once
+// fields (email, 18+ gate, two FogGemPickers). Continue is disabled until all
+// four answers are in; real navigation to Subscriptions happens only once
 // that's true.
 export default function SetupScreen() {
   const insets = useSafeAreaInsets();
-  const { state, hydrated, setBirthdate, setUserColor, setSonderColor } = useOnboarding();
+  const { state, hydrated, setBirthdate, setUserColor, setSonderColor, setEmail } =
+    useOnboarding();
   const [introDone, setIntroDone] = useState(false);
   const handleIntroComplete = useCallback(() => setIntroDone(true), []);
 
@@ -56,15 +70,18 @@ export default function SetupScreen() {
     [setBirthdate]
   );
 
-  const canContinue = isAdult && state.userColor !== null && state.sonderColor !== null;
+  const emailValid = isValidEmail(state.email ?? "");
+  const canContinue =
+    isAdult && emailValid && state.userColor !== null && state.sonderColor !== null;
 
   const handleContinue = useCallback(() => {
     if (!canContinue) return;
     // Cast: same stale-local-typegen gap noted in index.tsx's chatLink —
     // .expo/types/router.d.ts only regenerates against a live dev server,
     // so a route this new typechecks against a stale union locally even
-    // though it resolves fine at runtime.
-    router.push("/onboarding/permissions" as never);
+    // though it resolves fine at runtime. Part 52 (2026-08-25): Subscriptions
+    // now comes right after Registration, before the permits/sharing panels.
+    router.push("/onboarding/subscriptions" as never);
   }, [canContinue]);
 
   // Holds off rendering until the persisted state (if any) is loaded, so a
@@ -93,6 +110,22 @@ export default function SetupScreen() {
     // (title margins, inter-row gaps) to fit — not to reintroduce scrolling.
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
       <View style={styles.content}>
+        <Text style={styles.title}>What's your email?</Text>
+        <TextInput
+          style={styles.emailInput}
+          value={state.email ?? ""}
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          placeholderTextColor="rgba(240,230,255,0.35)"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+        />
+        {state.email !== null && state.email.length > 0 && !emailValid && (
+          <Text style={styles.gateText}>That doesn't look like a valid email yet.</Text>
+        )}
+
         <Text style={styles.title}>When were you born?</Text>
         <BirthdateWheelPicker value={birthdateValue} onChange={handleBirthdateChange} />
         {!isAdult && <Text style={styles.gateText}>Sonder is for adults 18 and up.</Text>}
@@ -137,6 +170,18 @@ const styles = StyleSheet.create({
   },
   title: { color: "#F0E6FF", fontSize: 17, fontWeight: "600", textAlign: "center" },
   gateText: { color: "#ff8a8a", fontSize: 12, textAlign: "center", marginTop: -6 },
+  emailInput: {
+    color: "#F0E6FF",
+    fontSize: 15,
+    width: "100%",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(240,230,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    textAlign: "center",
+  },
   footer: { alignItems: "center", paddingTop: 8, paddingHorizontal: 24 },
   continueButton: {
     backgroundColor: "#7CFFB2",

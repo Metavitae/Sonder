@@ -10,11 +10,14 @@ import {
 } from "react";
 
 import type { MistColor } from "./mistAtlas";
+import { SHARING_TIER_UP_ENABLED } from "./featureFlags";
+import { allSensesGranted } from "./senses";
 import {
   DEFAULT_ONBOARDING_STATE,
   loadOnboardingState,
   persistOnboardingState,
   type OnboardingState,
+  type SubscriptionTier,
 } from "./onboardingStorage";
 
 type OnboardingContextValue = {
@@ -27,12 +30,19 @@ type OnboardingContextValue = {
   setBirthdate: (birthdateIso: string) => void;
   setUserColor: (color: MistColor) => void;
   setSonderColor: (color: MistColor) => void;
+  setEmail: (email: string) => void;
+  setSubscriptionTier: (tier: SubscriptionTier) => void;
   setLevel1Decision: (decision: "shared" | "declined") => void;
   setLevel2Decision: (decision: "shared" | "declined") => void;
   // Level 2 "Share" is a real state change (plan §Confirmed answers), not
   // cosmetic — sets level2Decision and increments tier atomically so a
   // promote call can never race a separately-dispatched decision update.
   promoteTier: () => void;
+  // Part 52's real gating rule: only promotes if every device-supported
+  // sense is currently granted, and only while the sharing/tier-up path is
+  // feature-flagged on. No-ops (still records the decline/share choice via
+  // the caller's own setLevel2Decision) otherwise.
+  promoteTierIfEligible: () => Promise<void>;
   markComplete: () => void;
 };
 
@@ -79,6 +89,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     (color: MistColor) => setState((prev) => ({ ...prev, sonderColor: color })),
     []
   );
+  const setEmail = useCallback(
+    (email: string) => setState((prev) => ({ ...prev, email })),
+    []
+  );
+  const setSubscriptionTier = useCallback(
+    (tier: SubscriptionTier) => setState((prev) => ({ ...prev, subscriptionTier: tier })),
+    []
+  );
   const setLevel1Decision = useCallback(
     (decision: "shared" | "declined") =>
       setState((prev) => ({ ...prev, level1Decision: decision })),
@@ -92,6 +110,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const promoteTier = useCallback(() => {
     setState((prev) => ({ ...prev, level2Decision: "shared", tier: prev.tier + 1 }));
   }, []);
+  const promoteTierIfEligible = useCallback(async () => {
+    if (!SHARING_TIER_UP_ENABLED) return;
+    const eligible = await allSensesGranted();
+    if (eligible) promoteTier();
+  }, [promoteTier]);
   // Writes to storage directly, not via the reactive persist effect above.
   // Real bug found live (2026-08-24): intro.tsx calls markComplete() then
   // immediately completeOnboardingGate() in the same handler, which flips
@@ -114,9 +137,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setBirthdate,
       setUserColor,
       setSonderColor,
+      setEmail,
+      setSubscriptionTier,
       setLevel1Decision,
       setLevel2Decision,
       promoteTier,
+      promoteTierIfEligible,
       markComplete,
     }),
     [
@@ -125,9 +151,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setBirthdate,
       setUserColor,
       setSonderColor,
+      setEmail,
+      setSubscriptionTier,
       setLevel1Decision,
       setLevel2Decision,
       promoteTier,
+      promoteTierIfEligible,
       markComplete,
     ]
   );
