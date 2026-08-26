@@ -1,6 +1,7 @@
 package expo.modules.sonderaudioroute
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -35,6 +36,11 @@ class SonderAudioRouteModule : Module() {
     return devices.any { it.type in HEADSET_TYPES }
   }
 
+  private fun hasSystemFeature(feature: String): Boolean {
+    val pm = appContext.reactContext?.packageManager ?: return false
+    return pm.hasSystemFeature(feature)
+  }
+
   override fun definition() = ModuleDefinition {
     Name("SonderAudioRoute")
 
@@ -42,6 +48,24 @@ class SonderAudioRouteModule : Module() {
 
     Function("isHeadsetConnected") {
       isHeadsetConnected()
+    }
+
+    // Real per-device capability checks for the permits panel (Part 61 —
+    // "the app itself must always perform a real capability check for
+    // every sense... zero hardcoded/assumed-true values"). PackageManager
+    // is the actual Android API apps use to ask this; there's no way to
+    // ask it from Expo's own JS-side modules, so it lives here alongside
+    // the other real native audio-route check this module already does.
+    Function("hasAudioOutput") {
+      hasSystemFeature(PackageManager.FEATURE_AUDIO_OUTPUT)
+    }
+
+    Function("hasMicrophone") {
+      hasSystemFeature(PackageManager.FEATURE_MICROPHONE)
+    }
+
+    Function("hasNotificationService") {
+      appContext.reactContext?.getSystemService(Context.NOTIFICATION_SERVICE) != null
     }
 
     // Registered/unregistered against the module's own lifecycle (not a

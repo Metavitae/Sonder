@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import * as LocalAuthentication from "expo-local-authentication";
 import { Accelerometer } from "expo-sensors";
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
+import SonderAudioRoute from "../../modules/sonder-audio-route/src/SonderAudioRouteModule";
 
 // Permits-panel sense list, current source: "Sonder - Direct Instructions
 // for CC 2026-08-26 Part 58" (extends Part 57). Every real sense Sonder
@@ -70,50 +71,57 @@ const motion: Sense = {
   request: async () => true,
 };
 
-// AudioManager device-route detection is a core Android API present on
-// every API level this app targets — real variance here would only be a
-// device with no audio output at all, which isn't a real case on Android.
-// Treated as universally supported, same as before, but wrapped async to
-// match the shared interface.
+// Part 61: real per-device capability check, not an assumption — Android's
+// PackageManager.FEATURE_AUDIO_OUTPUT, the actual API apps use for this,
+// checked via a Function added to the local sonder-audio-route native
+// module (no JS-side Expo API exposes PackageManager feature checks).
 const headphones: Sense = {
   id: "headphones",
   label: "Headphone detection",
   shareable: true,
   requiresAction: false,
-  isSupported: async () => true,
+  isSupported: async () => SonderAudioRoute.hasAudioOutput(),
   isGranted: async () => true,
   request: async () => true,
 };
 
 // New per Part 58 item 1 — paired with the record-then-transcribe voice
 // mode (not built yet, this is the permission piece only). Real Android
-// runtime permission (RECORD_AUDIO).
+// runtime permission (RECORD_AUDIO). isSupported per Part 61: real
+// PackageManager.FEATURE_MICROPHONE check, same native module as headphones.
 const microphone: Sense = {
   id: "microphone",
   label: "Microphone",
   shareable: true,
   requiresAction: true,
-  isSupported: async () => true,
+  isSupported: async () => SonderAudioRoute.hasMicrophone(),
   isGranted: async () => (await getRecordingPermissionsAsync()).granted,
   request: async () => (await requestRecordingPermissionsAsync()).granted,
 };
 
+// isSupported per Part 61: expo-calendar's own isAvailableAsync() is the
+// real capability check (confirms the Calendar Provider is actually
+// present/reachable on this device) — distinct from getCalendarPermissionsAsync,
+// which is a permission-status check, not a capability one.
 const calendar: Sense = {
   id: "calendar",
   label: "Calendar",
   shareable: false,
   requiresAction: true,
-  isSupported: async () => true,
+  isSupported: async () => Calendar.isAvailableAsync(),
   isGranted: async () => (await Calendar.getCalendarPermissionsAsync()).status === "granted",
   request: async () => (await Calendar.requestCalendarPermissionsAsync()).status === "granted",
 };
 
+// isSupported per Part 61: real check that the device's NotificationManager
+// system service is actually obtainable, same native module as headphones/
+// microphone (no JS-side Expo API exposes this).
 const notifications: Sense = {
   id: "notifications",
   label: "Notifications",
   shareable: false,
   requiresAction: true,
-  isSupported: async () => true,
+  isSupported: async () => SonderAudioRoute.hasNotificationService(),
   isGranted: async () => (await Notifications.getPermissionsAsync()).status === "granted",
   request: async () => (await Notifications.requestPermissionsAsync()).status === "granted",
 };
