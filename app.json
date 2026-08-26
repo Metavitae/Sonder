@@ -25,7 +25,11 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.metavitae.Sonder",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.USE_BIOMETRIC"
       ]
     },
     "web": {
@@ -64,7 +68,21 @@
           }
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Sonder uses your calendar to notice upcoming events, the way a friend would."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#208AEF"
+        }
+      ],
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

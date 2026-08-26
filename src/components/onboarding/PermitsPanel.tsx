@@ -21,9 +21,11 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
     setResults((prev) => ({ ...prev, [sense.id]: granted ? "granted" : "denied" }));
   }, []);
 
-  const handleContinue = useCallback(() => {
-    const anyGranted = senses.some((s) => results[s.id] === "granted" || s.isGranted());
-    onDone(anyGranted);
+  const handleContinue = useCallback(async () => {
+    const already = await Promise.all(
+      senses.map(async (s) => results[s.id] === "granted" || (await s.isGranted()))
+    );
+    onDone(already.some(Boolean));
   }, [senses, results, onDone]);
 
   return (
