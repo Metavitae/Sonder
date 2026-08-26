@@ -19,8 +19,24 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
 
   useEffect(() => {
     let cancelled = false;
-    supportedSenses().then((s) => {
-      if (!cancelled) setSenses(s);
+    supportedSenses().then(async (s) => {
+      if (cancelled) return;
+      setSenses(s);
+      // Reflect already-granted state on load — matters for motion/
+      // headphones (Part 55: "defaulted on/active, since there's no real
+      // permission state to withhold" — they'd otherwise sit on an "Allow"
+      // button forever, no dialog ever fires to flip them) and equally for
+      // camera/calendar/notifications/biometric on a reinstall where the
+      // permission was already granted previously.
+      const already = await Promise.all(s.map((sense) => sense.isGranted()));
+      if (cancelled) return;
+      setResults((prev) => {
+        const next = { ...prev };
+        s.forEach((sense, i) => {
+          if (already[i]) next[sense.id] = "granted";
+        });
+        return next;
+      });
     });
     return () => {
       cancelled = true;
