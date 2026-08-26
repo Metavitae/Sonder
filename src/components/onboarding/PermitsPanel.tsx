@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { LEVEL1_ASK, PERMITS_EXPLANATION, DECLINE_RESPONSE } from "../../lib/permissionCopy";
+import { PERMITS_EXPLANATION, DECLINE_RESPONSE } from "../../lib/permissionCopy";
 import { supportedSenses, type Sense } from "../../lib/senses";
 
 type SenseResult = "granted" | "denied";
 
-// Part 52's Permits panel: ONE panel, one button per sense the device
+// Part 52's Permits panel: ONE panel, one row per sense the device
 // actually supports (src/lib/senses.ts, dynamically detected per Part 58
 // item 3 — not a hardcoded list), with ONE shared explanation covering all
 // of them together (not per-sense text, per Part 45 Addendum's "do not
 // write individual per-sense explanations" rule, which Part 52 carries
-// forward). Renders as a Sonder bubble, same visual language as the old
-// single-ask Level 1 prompt this replaces.
+// forward). Part 60 item 1: the old LEVEL1_ASK opening line was cut here —
+// it duplicated PERMITS_EXPLANATION (both said "I can be closer to you"),
+// written originally for a different, one-on-one in-chat context. The
+// constant itself is untouched in permissionCopy.ts in case that original
+// context ever needs it — only this panel's render stopped using it.
 export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void }) {
   const [senses, setSenses] = useState<Sense[] | null>(null);
   const [results, setResults] = useState<Record<string, SenseResult>>({});
@@ -23,9 +26,7 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
       if (cancelled) return;
       setSenses(s);
       // Reflect already-granted state on load — matters for motion/
-      // headphones (Part 55: "defaulted on/active, since there's no real
-      // permission state to withhold" — they'd otherwise sit on an "Allow"
-      // button forever, no dialog ever fires to flip them) and equally for
+      // headphones (Part 55: "defaulted on/active") and equally for
       // camera/calendar/notifications/biometric on a reinstall where the
       // permission was already granted previously.
       const already = await Promise.all(s.map((sense) => sense.isGranted()));
@@ -60,12 +61,25 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
 
   return (
     <View style={styles.bubble}>
-      <Text style={styles.bubbleText}>{LEVEL1_ASK}</Text>
       <Text style={styles.explanation}>{PERMITS_EXPLANATION}</Text>
 
       <View style={styles.senseList}>
         {senses.map((sense) => {
           const result = results[sense.id];
+
+          // Part 60 item 2: motion/headphone-detection never trigger a
+          // real system dialog (Android auto-grants them, no popup
+          // exists) — styling them identically to a real "Allow" button
+          // misleadingly implies an equivalent ask. Rendered as plain
+          // informational status instead: no Pressable, no button chrome.
+          if (!sense.requiresAction) {
+            return (
+              <View key={sense.id} style={styles.statusRow}>
+                <Text style={styles.statusText}>{sense.label} — always on</Text>
+              </View>
+            );
+          }
+
           return (
             <View key={sense.id} style={styles.senseRow}>
               <Pressable
@@ -99,7 +113,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     gap: 12,
   },
-  bubbleText: { color: "#FFFFFF", fontSize: 15 },
   explanation: { color: "rgba(255,255,255,0.7)", fontSize: 13, lineHeight: 18 },
   senseList: { gap: 8 },
   senseRow: { gap: 4 },
@@ -113,6 +126,14 @@ const styles = StyleSheet.create({
   senseButtonGranted: { backgroundColor: "rgba(124,255,178,0.35)" },
   senseButtonText: { color: "#000", fontWeight: "700", fontSize: 14 },
   declineText: { color: "rgba(255,255,255,0.6)", fontSize: 12 },
+  statusRow: {
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  statusText: { color: "rgba(255,255,255,0.55)", fontSize: 13, fontStyle: "italic" },
   continueButton: {
     backgroundColor: "rgba(255,255,255,0.12)",
     borderRadius: 8,

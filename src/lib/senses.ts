@@ -34,6 +34,12 @@ export type Sense = {
   id: SenseId;
   label: string;
   shareable: boolean;
+  // Part 60 item 2: whether tapping this sense's button does anything real
+  // (shows a system permission dialog, or — biometric — runs a real auth
+  // prompt) vs. is purely informational because Android auto-grants it and
+  // no dialog exists to trigger. Panel renders these two cases differently
+  // so it never visually implies a real ask where there isn't one.
+  requiresAction: boolean;
   isSupported: () => Promise<boolean>;
   isGranted: () => Promise<boolean>;
   request: () => Promise<boolean>;
@@ -43,6 +49,7 @@ const vision: Sense = {
   id: "vision",
   label: "Camera",
   shareable: true,
+  requiresAction: true,
   isSupported: async () =>
     Camera.getAvailableCameraDevices().some((d) => d.position === "front"),
   isGranted: async () => Camera.getCameraPermissionStatus() === "granted",
@@ -54,6 +61,7 @@ const motion: Sense = {
   id: "motion",
   label: "Motion",
   shareable: true,
+  requiresAction: false,
   isSupported: async () => Accelerometer.isAvailableAsync(),
   // No Android runtime permission for motion — auto-granted at install,
   // no system dialog exists. Shown as an always-on toggle when supported
@@ -71,6 +79,7 @@ const headphones: Sense = {
   id: "headphones",
   label: "Headphone detection",
   shareable: true,
+  requiresAction: false,
   isSupported: async () => true,
   isGranted: async () => true,
   request: async () => true,
@@ -83,6 +92,7 @@ const microphone: Sense = {
   id: "microphone",
   label: "Microphone",
   shareable: true,
+  requiresAction: true,
   isSupported: async () => true,
   isGranted: async () => (await getRecordingPermissionsAsync()).granted,
   request: async () => (await requestRecordingPermissionsAsync()).granted,
@@ -92,6 +102,7 @@ const calendar: Sense = {
   id: "calendar",
   label: "Calendar",
   shareable: false,
+  requiresAction: true,
   isSupported: async () => true,
   isGranted: async () => (await Calendar.getCalendarPermissionsAsync()).status === "granted",
   request: async () => (await Calendar.requestCalendarPermissionsAsync()).status === "granted",
@@ -101,6 +112,7 @@ const notifications: Sense = {
   id: "notifications",
   label: "Notifications",
   shareable: false,
+  requiresAction: true,
   isSupported: async () => true,
   isGranted: async () => (await Notifications.getPermissionsAsync()).status === "granted",
   request: async () => (await Notifications.requestPermissionsAsync()).status === "granted",
@@ -116,7 +128,13 @@ const biometric: Sense = {
   id: "biometric",
   label: "Biometric",
   shareable: false,
-  isSupported: async () => true,
+  requiresAction: true,
+  // Real per-device detection — a device with no fingerprint/face
+  // hardware at all shouldn't show this toggle. Enrollment (whether the
+  // hardware that exists actually has a fingerprint/face registered) is a
+  // separate, changeable state, checked in isGranted instead — not a
+  // capability question.
+  isSupported: async () => LocalAuthentication.hasHardwareAsync(),
   isGranted: async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
