@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { LEVEL1_ASK, PERMITS_EXPLANATION, DECLINE_RESPONSE } from "../../lib/permissionCopy";
@@ -7,14 +7,25 @@ import { supportedSenses, type Sense } from "../../lib/senses";
 type SenseResult = "granted" | "denied";
 
 // Part 52's Permits panel: ONE panel, one button per sense the device
-// actually supports (src/lib/senses.ts — just Camera today), with ONE
-// shared explanation covering all of them together (not per-sense text,
-// per Part 45 Addendum's "do not write individual per-sense explanations"
-// rule, which Part 52 carries forward). Renders as a Sonder bubble, same
-// visual language as the old single-ask Level 1 prompt this replaces.
+// actually supports (src/lib/senses.ts, dynamically detected per Part 58
+// item 3 — not a hardcoded list), with ONE shared explanation covering all
+// of them together (not per-sense text, per Part 45 Addendum's "do not
+// write individual per-sense explanations" rule, which Part 52 carries
+// forward). Renders as a Sonder bubble, same visual language as the old
+// single-ask Level 1 prompt this replaces.
 export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void }) {
-  const [senses] = useState<Sense[]>(() => supportedSenses());
+  const [senses, setSenses] = useState<Sense[] | null>(null);
   const [results, setResults] = useState<Record<string, SenseResult>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    supportedSenses().then((s) => {
+      if (!cancelled) setSenses(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleRequest = useCallback(async (sense: Sense) => {
     const granted = await sense.request();
@@ -22,11 +33,14 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
   }, []);
 
   const handleContinue = useCallback(async () => {
+    if (!senses) return;
     const already = await Promise.all(
       senses.map(async (s) => results[s.id] === "granted" || (await s.isGranted()))
     );
     onDone(already.some(Boolean));
   }, [senses, results, onDone]);
+
+  if (!senses) return null;
 
   return (
     <View style={styles.bubble}>

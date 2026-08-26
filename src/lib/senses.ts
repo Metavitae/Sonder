@@ -2,28 +2,39 @@ import { Camera } from "react-native-vision-camera";
 import * as Calendar from "expo-calendar";
 import * as Notifications from "expo-notifications";
 import * as LocalAuthentication from "expo-local-authentication";
+import { Accelerometer } from "expo-sensors";
+import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
 
-// Part 57's final permits-panel sense list (supersedes Parts 54/55 — see
-// "Sonder - Direct Instructions for CC 2026-08-26 Part 57"). Every real
-// sense Sonder uses gets its own toggle, whether or not Android happens to
-// gate it behind a runtime-permission dialog — the panel represents what
-// Sonder actually senses, not just the OS-permission subset (Part 55).
+// Permits-panel sense list, current source: "Sonder - Direct Instructions
+// for CC 2026-08-26 Part 58" (extends Part 57). Every real sense Sonder
+// uses gets its own toggle on the one panel, dynamically detected per
+// device rather than a fixed universal list (Part 58 item 3) — both
+// isSupported and isGranted are async because real per-device detection
+// (Accelerometer.isAvailableAsync, camera device enumeration) and real OS
+// permission status (Calendar/Notifications/LocalAuthentication) are both
+// promise-based; only vision-camera happens to expose a sync status getter,
+// so the interface doesn't special-case it.
 //
-// Microphone is deliberately NOT here yet: Part 56/57 scope it to a new
-// voice+video conversation mode that doesn't exist in the app yet (no
-// recording code at all per Part 54's audit) — real new build, reported on
-// separately rather than added blind. Location/contacts/nearby-devices/
-// call-log/body-sensors are explicitly excluded per Part 57 — do not add.
-export type SenseId = "vision" | "motion" | "headphones" | "calendar" | "notifications" | "biometric";
+// `shareable` marks the four senses that generate real signal about the
+// user's expressions/environment and are genuinely anonymizable under the
+// Level 1/Level 2 architecture (Part 58 item 2) — only these count toward
+// the tier-up gate (`allSensesGranted`). Calendar/notifications/biometric
+// are real Sonder features, shown on the same panel, but are never shared
+// with anyone and never required for a tier-up.
+export type SenseId =
+  | "vision"
+  | "motion"
+  | "headphones"
+  | "microphone"
+  | "calendar"
+  | "notifications"
+  | "biometric";
 
 export type Sense = {
   id: SenseId;
   label: string;
-  isSupported: () => boolean;
-  // Async: only vision-camera exposes a synchronous cached status. Calendar/
-  // Notifications/LocalAuthentication are promise-based (no sync getter),
-  // so the interface is async across the board rather than faking a sync
-  // read for some senses and not others.
+  shareable: boolean;
+  isSupported: () => Promise<boolean>;
   isGranted: () => Promise<boolean>;
   request: () => Promise<boolean>;
 };
@@ -31,37 +42,57 @@ export type Sense = {
 const vision: Sense = {
   id: "vision",
   label: "Camera",
-  isSupported: () =>
+  shareable: true,
+  isSupported: async () =>
     Camera.getAvailableCameraDevices().some((d) => d.position === "front"),
   isGranted: async () => Camera.getCameraPermissionStatus() === "granted",
   request: async () => (await Camera.requestCameraPermission()) === "granted",
 };
 
-// Motion and headphone-detection are real, active senses (src/lib/motion.ts,
-// src/lib/audioRoute.ts) but Android has no runtime permission for either —
-// auto-granted at install, no system dialog exists to trigger. Shown as
-// always-on toggles per Part 55/57's "honest about everything Sonder
-// senses" instruction, not because there's a real grant/deny state.
+// Real per-device detection — not every device has an accelerometer.
 const motion: Sense = {
   id: "motion",
   label: "Motion",
-  isSupported: () => true,
+  shareable: true,
+  isSupported: async () => Accelerometer.isAvailableAsync(),
+  // No Android runtime permission for motion — auto-granted at install,
+  // no system dialog exists. Shown as an always-on toggle when supported
+  // (Part 55/57's "honest about everything Sonder senses").
   isGranted: async () => true,
   request: async () => true,
 };
 
+// AudioManager device-route detection is a core Android API present on
+// every API level this app targets — real variance here would only be a
+// device with no audio output at all, which isn't a real case on Android.
+// Treated as universally supported, same as before, but wrapped async to
+// match the shared interface.
 const headphones: Sense = {
   id: "headphones",
   label: "Headphone detection",
-  isSupported: () => true,
+  shareable: true,
+  isSupported: async () => true,
   isGranted: async () => true,
   request: async () => true,
+};
+
+// New per Part 58 item 1 — paired with the record-then-transcribe voice
+// mode (not built yet, this is the permission piece only). Real Android
+// runtime permission (RECORD_AUDIO).
+const microphone: Sense = {
+  id: "microphone",
+  label: "Microphone",
+  shareable: true,
+  isSupported: async () => true,
+  isGranted: async () => (await getRecordingPermissionsAsync()).granted,
+  request: async () => (await requestRecordingPermissionsAsync()).granted,
 };
 
 const calendar: Sense = {
   id: "calendar",
   label: "Calendar",
-  isSupported: () => true,
+  shareable: false,
+  isSupported: async () => true,
   isGranted: async () => (await Calendar.getCalendarPermissionsAsync()).status === "granted",
   request: async () => (await Calendar.requestCalendarPermissionsAsync()).status === "granted",
 };
@@ -69,21 +100,23 @@ const calendar: Sense = {
 const notifications: Sense = {
   id: "notifications",
   label: "Notifications",
-  isSupported: () => true,
+  shareable: false,
+  isSupported: async () => true,
   isGranted: async () => (await Notifications.getPermissionsAsync()).status === "granted",
   request: async () => (await Notifications.requestPermissionsAsync()).status === "granted",
 };
 
 // Biometric has no Android runtime "permission" the OS gates the way it
-// does camera/calendar/notifications — USE_BIOMETRIC is a normal manifest
-// permission granted automatically at install. The real grant moment is
-// hardware + enrollment being present, confirmed by actually running the
-// system fingerprint/face prompt once (authenticateAsync) rather than a
-// standing permission check.
+// does camera/calendar/notifications/microphone — USE_BIOMETRIC is a
+// normal manifest permission granted automatically at install. The real
+// grant moment is hardware + enrollment being present, confirmed by
+// actually running the system fingerprint/face prompt once
+// (authenticateAsync) rather than a standing permission check.
 const biometric: Sense = {
   id: "biometric",
   label: "Biometric",
-  isSupported: () => true,
+  shareable: false,
+  isSupported: async () => true,
   isGranted: async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
@@ -100,18 +133,32 @@ const biometric: Sense = {
   },
 };
 
-export const ALL_SENSES: Sense[] = [vision, motion, headphones, calendar, notifications, biometric];
+export const ALL_SENSES: Sense[] = [
+  vision,
+  motion,
+  headphones,
+  microphone,
+  calendar,
+  notifications,
+  biometric,
+];
 
 // Senses this specific device actually has — the Permits panel maps over
-// this, not ALL_SENSES directly.
-export function supportedSenses(): Sense[] {
-  return ALL_SENSES.filter((s) => s.isSupported());
+// this, not ALL_SENSES directly. Async: real per-device capability
+// detection (Part 58 item 3), not a hardcoded list.
+export async function supportedSenses(): Promise<Sense[]> {
+  const supportFlags = await Promise.all(ALL_SENSES.map((s) => s.isSupported()));
+  return ALL_SENSES.filter((_, i) => supportFlags[i]);
 }
 
-// Part 52's tier-up gating rule: every sense the device supports must be
-// currently granted, not just some of them.
+// Part 52's tier-up gating rule, corrected per Part 58 item 2: only the
+// four shareable senses this device actually supports must be granted —
+// calendar/notifications/biometric never gate a tier-up. Part 58 item 3:
+// the "full permission" bar is whatever this device's real shareable-sense
+// capability is, not a fixed count (a device with no headphone-detection
+// only needs the other three).
 export async function allSensesGranted(): Promise<boolean> {
-  const supported = supportedSenses();
+  const supported = (await supportedSenses()).filter((s) => s.shareable);
   if (supported.length === 0) return false;
   const granted = await Promise.all(supported.map((s) => s.isGranted()));
   return granted.every(Boolean);
