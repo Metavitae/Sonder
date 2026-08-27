@@ -104,6 +104,14 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
   );
 }
 
+// Gold accent shared with FogGemSwatch's museum-placard borders/labels —
+// reused here so the permits panel reads as the same fog-themed onboarding
+// object language, not a generic UI component. These are translucent
+// frosted panels rather than flat fills so the ambient violet mist mounted
+// behind every onboarding screen (onboarding/_layout.tsx's SpriteMistPoC)
+// shows through, instead of a solid button sitting on top of it.
+const GOLD = "#D4AF7A";
+
 const styles = StyleSheet.create({
   bubble: {
     padding: 12,
@@ -117,29 +125,36 @@ const styles = StyleSheet.create({
   senseList: { gap: 8 },
   senseRow: { gap: 4 },
   senseButton: {
-    backgroundColor: "#7CFFB2",
+    backgroundColor: "rgba(212,175,122,0.12)",
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(212,175,122,0.5)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     alignItems: "center",
   },
-  senseButtonGranted: { backgroundColor: "rgba(124,255,178,0.35)" },
-  senseButtonText: { color: "#000", fontWeight: "700", fontSize: 14 },
+  senseButtonGranted: {
+    backgroundColor: "rgba(212,175,122,0.28)",
+    borderColor: GOLD,
+  },
+  senseButtonText: { color: GOLD, fontWeight: "700", fontSize: 14, letterSpacing: 0.5 },
   declineText: { color: "rgba(255,255,255,0.6)", fontSize: 12 },
   statusRow: {
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: "rgba(212,175,122,0.25)",
   },
-  statusText: { color: "rgba(255,255,255,0.55)", fontSize: 13, fontStyle: "italic" },
+  statusText: { color: "rgba(212,175,122,0.7)", fontSize: 13, fontStyle: "italic" },
   continueButton: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(212,175,122,0.12)",
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(212,175,122,0.5)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     alignItems: "center",
   },
-  continueButtonText: { color: "#F0E6FF", fontWeight: "700", fontSize: 14 },
+  continueButtonText: { color: GOLD, fontWeight: "700", fontSize: 14, letterSpacing: 0.5 },
 });
