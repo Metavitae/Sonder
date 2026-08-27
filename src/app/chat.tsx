@@ -74,13 +74,19 @@ export default function ChatScreen() {
   const [wakeLine, setWakeLine] = useState<string | null>(null);
   const dreamOverlay = useSharedValue(0);
 
+  // TEMP DEBUG (Part 67) — remove once the trigger bug is root-caused.
+  console.log("[dreamdebug] ChatScreen RENDER, isDreaming=", isDreaming, "isWaiting=", isWaiting);
+
   useEffect(() => {
+    console.log("[dreamdebug] chat.tsx dreamOverlay effect fired, isDreaming=", isDreaming);
     if (isDreaming) {
       const line = pickDreamLine();
+      console.log("[dreamdebug] picked dream line=", line);
       setDreamLine(line);
       speak(line, voice);
     }
     dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
+    console.log("[dreamdebug] dreamOverlay.value set, target=", isDreaming ? DREAM_OVERLAY_OPACITY : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDreaming, dreamOverlay]);
 
