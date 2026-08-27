@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { subscribeDreamWake } from "./dreamWakeBus";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 25", item 6's
 // proposed default: "an idle timer during night-time hours — quiet for a
@@ -46,6 +47,11 @@ export function useIdleSleep() {
     }, CHECK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
+
+  // Part 63: a real jolt (FreefallStartle, mounted globally) should wake
+  // Sonder from dreaming, same as noteActivity does for ordinary user
+  // interaction — reuses that exact wake path rather than a second one.
+  useEffect(() => subscribeDreamWake(noteActivity), [noteActivity]);
 
   return { isDreaming, justWoke, noteActivity, clearJustWoke };
 }

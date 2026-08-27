@@ -10,6 +10,7 @@ import Animated, {
 import { useFreefallDetector } from "../lib/motion";
 import { useSpeak } from "../lib/speak";
 import { usePreferredVoice } from "../lib/voicePreference";
+import { emitDreamWake } from "../lib/dreamWakeBus";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 2 —
 // real accelerometer freefall detection, a bigger/funnier startle reaction
@@ -40,6 +41,11 @@ export function FreefallStartle() {
     const now = Date.now();
     if (now - lastTriggerRef.current < STARTLE_COOLDOWN_MS) return;
     lastTriggerRef.current = now;
+
+    // Part 63: a real jolt should interrupt sleep, same as it would for a
+    // person — wake the dream state (if chat.tsx is mounted and currently
+    // dreaming) before the rest of the startle reaction fires.
+    emitDreamWake();
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     setTimeout(() => {
