@@ -1,21 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { subscribeDreamWake } from "./dreamWakeBus";
 
-// Per "Sonder - Direct Instructions for CC 2026-08-14 Part 25", item 6's
-// proposed default: "an idle timer during night-time hours — quiet for a
-// real stretch (10+ minutes of no interaction) combined with local device
-// time being late — rather than either signal alone." Explicitly a default
-// to revisit, not a locked spec — same for the night-time window below,
-// which Part 25 never pinned to exact hours.
+// Per "Sonder - Direct Instructions for CC 2026-08-28 Part 70": the
+// night-hours gate (11pm-6am local) was never a real founder decision, just
+// an unflagged default from Part 25 — removed. Idle time alone (10+ minutes)
+// is the only condition now; Sonder can't know if someone works nights,
+// lives in a different time zone, or just wants a quiet afternoon moment.
 const IDLE_THRESHOLD_MS = 10 * 60 * 1000;
-const NIGHT_START_HOUR = 23; // 11pm local
-const NIGHT_END_HOUR = 6; // 6am local
 const CHECK_INTERVAL_MS = 15_000;
-
-function isNightTime(date: Date): boolean {
-  const h = date.getHours();
-  return h >= NIGHT_START_HOUR || h < NIGHT_END_HOUR;
-}
 
 export function useIdleSleep() {
   const [isDreaming, setIsDreaming] = useState(false);
@@ -46,9 +38,8 @@ export function useIdleSleep() {
     const id = setInterval(() => {
       const now = Date.now();
       const idleFor = now - lastActivityRef.current;
-      const night = isNightTime(new Date());
-      console.log("[dreamdebug] tick now=", now, new Date(now).toString(), "idleFor=", idleFor, "night=", night);
-      if (idleFor >= IDLE_THRESHOLD_MS && night) {
+      console.log("[dreamdebug] tick now=", now, new Date(now).toString(), "idleFor=", idleFor);
+      if (idleFor >= IDLE_THRESHOLD_MS) {
         console.log("[dreamdebug] CONDITIONS MET -> setIsDreaming(true)");
         wasDreamingRef.current = true;
         setIsDreaming(true);
