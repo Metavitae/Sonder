@@ -58,7 +58,7 @@ export function FreefallStartle() {
     );
 
     const line = FREEFALL_LINES[Math.floor(Math.random() * FREEFALL_LINES.length)];
-    speak(line, voice);
+    speak(line, voice, { instant: true });
   }, [flash, speak, voice]);
 
   useFreefallDetector(trigger);

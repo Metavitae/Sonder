@@ -83,7 +83,7 @@ export default function ChatScreen() {
       const line = pickDreamLine();
       console.log("[dreamdebug] picked dream line=", line);
       setDreamLine(line);
-      speak(line, voice);
+      speak(line, voice, { instant: true });
     }
     dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
     console.log("[dreamdebug] dreamOverlay.value set, target=", isDreaming ? DREAM_OVERLAY_OPACITY : 0);
@@ -94,7 +94,7 @@ export default function ChatScreen() {
     if (!justWoke) return;
     const line = pickWakeLine();
     setWakeLine(line);
-    speak(line, voice);
+    speak(line, voice, { instant: true });
     clearJustWoke();
     const id = setTimeout(() => setWakeLine(null), WAKE_LINE_DURATION_MS);
     return () => clearTimeout(id);

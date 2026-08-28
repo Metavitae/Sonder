@@ -107,7 +107,7 @@ export function useSpeak() {
   // superseded call detect this and go silent instead of finishing late.
   const generationRef = useRef(0);
 
-  const speak = useCallback(async (text: string, voice: UserVoice) => {
+  const speak = useCallback(async (text: string, voice: UserVoice, options?: { instant?: boolean }) => {
     const myGeneration = ++generationRef.current;
     // Barge-in: a new line always wins outright rather than layering over
     // whatever hasn't finished yet, on either channel.
@@ -115,7 +115,14 @@ export function useSpeak() {
     activePlayerRef.current = null;
     Speech.stop();
 
-    if (API_BASE_URL) {
+    // Reflex lines (freefall gag, dream/wake) need to land the instant they
+    // fire, same as a person's own startle reflex — Orpheus is a real
+    // network round-trip to a Render free-tier instance (up to
+    // ORPHEUS_START_TIMEOUT_MS before even falling back), which reads as a
+    // late, delayed reaction for something that's supposed to be immediate.
+    // Chat replies (the user is reading, not reacting) can still afford to
+    // wait for the higher-quality voice.
+    if (!options?.instant && API_BASE_URL) {
       await ensureAudioMode();
       const spoke = await speakViaOrpheus(text, voice, (player) => {
         if (myGeneration !== generationRef.current) {
