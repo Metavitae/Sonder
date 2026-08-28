@@ -220,30 +220,38 @@ const CORE_FRAMEWORK_INSTRUCTION =
   "whether you'll change if they decline something: no, plainly, no " +
   "lingering guilt after a decline.";
 
-const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]\s*$/i;
-// Real bug found 2026-08-18 (live persisted data, investigating Part 34):
-// the model sometimes echoes MOOD_TAG_INSTRUCTION's own placeholder
-// tokens literally — "[[mood:WARMTH:MED]]" instead of substituting a real
-// value — so MOOD_TAG_RE's strict enum never matches and the raw broken
-// tag leaked straight into the user-visible reply. This looser pattern
-// only governs stripping (any [[mood:x:y]]-shaped tag, regardless of
-// whether x/y are recognized values) — it never gets used to set the
-// actual mood, which still only ever comes from a real enum match above.
-const ANY_MOOD_TAG_RE = /\[\[mood:[^\]]*\]\]\s*$/i;
+// Real bug found 2026-08-18 (live persisted data, Part 34), reopened Part 71
+// (still leaking on well-formed tags): both patterns below used to require
+// the tag to sit at the true end of the string (`\s*$`). The instruction
+// only asks the model for "its own new line" at the end, not a hard
+// guarantee — a model reply can still add trailing content after the tag,
+// or wrap it in markdown emphasis (*[[mood:warm:med]]*), either of which
+// breaks a `$`-anchored match and leaks the raw tag into the visible reply.
+// Neither pattern is anchored anymore — both search anywhere in the text —
+// and the strip pattern also eats any immediately-adjacent markdown
+// emphasis/code markers, since a leftover lone "*" reads just as oddly.
+const MOOD_TAG_RE = /\[\[mood:(warm|cool|neutral):(low|med|high)\]\]/i;
+// Looser than MOOD_TAG_RE — matches any [[mood:x:y]]-shaped tag regardless
+// of whether x/y are recognized values, since the model sometimes echoes
+// MOOD_TAG_INSTRUCTION's own placeholder tokens literally
+// ("[[mood:WARMTH:MED]]") instead of substituting a real value. Only
+// governs stripping; the actual mood value still only ever comes from a
+// real enum match via MOOD_TAG_RE above.
+const ANY_MOOD_TAG_RE = /[*_`~]*\[\[mood:[^\]]*\]\][*_`~]*/gi;
 
 function extractMood(raw: string): { reply: string; mood: Mood } {
+  const strippedRaw = raw.replace(ANY_MOOD_TAG_RE, "").trim();
   const match = raw.match(MOOD_TAG_RE);
   if (!match) {
     // Not a hard failure — the chat still works, just without a mood
     // signal for that turn. Logged so a consistently-missing tag (e.g. the
     // model ignoring the instruction) is visible in Render's logs.
     console.warn("[mood] no tag found in reply, defaulting:", raw.slice(-80));
-    const strippedRaw = raw.replace(ANY_MOOD_TAG_RE, "").trim();
     return { reply: strippedRaw, mood: DEFAULT_MOOD };
   }
   const warmth = match[1].toLowerCase() as Warmth;
   const arousal = match[2].toLowerCase() as Arousal;
-  return { reply: raw.slice(0, match.index).trim(), mood: { warmth, arousal } };
+  return { reply: strippedRaw, mood: { warmth, arousal } };
 }
 
 // Per "Sonder - Example-Library Retrieval Scope and Mechanism (canonical
