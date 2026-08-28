@@ -64,21 +64,8 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
       <Text style={styles.explanation}>{PERMITS_EXPLANATION}</Text>
 
       <View style={styles.senseList}>
-        {senses.map((sense) => {
+        {senses.filter((sense) => sense.requiresAction).map((sense) => {
           const result = results[sense.id];
-
-          // Part 60 item 2: motion/headphone-detection never trigger a
-          // real system dialog (Android auto-grants them, no popup
-          // exists) — styling them identically to a real "Allow" button
-          // misleadingly implies an equivalent ask. Rendered as plain
-          // informational status instead: no Pressable, no button chrome.
-          if (!sense.requiresAction) {
-            return (
-              <View key={sense.id} style={styles.statusRow}>
-                <Text style={styles.statusText}>{sense.label} — always on</Text>
-              </View>
-            );
-          }
 
           return (
             <View key={sense.id} style={styles.senseRow}>
@@ -113,11 +100,20 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
 const GOLD = "#D4AF7A";
 
 const styles = StyleSheet.create({
+  // Deliberately far lighter than chat.tsx/sharing.tsx's shared
+  // rgba(0,0,0,0.45) "Sonder speaks" bubble convention — this panel isn't
+  // a spoken line, it's the fog-themed permits object itself. Part 65's
+  // "the ambient violet mist shows through" intent never actually landed
+  // (founder screenshot, Part 68) because this container's own near-opaque
+  // backdrop was sitting on top of the mist the whole time, masking it
+  // regardless of how translucent the buttons inside were.
   bubble: {
     padding: 12,
     borderRadius: 12,
     maxWidth: "90%",
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(212,175,122,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(212,175,122,0.2)",
     alignSelf: "flex-start",
     gap: 12,
   },
@@ -139,14 +135,6 @@ const styles = StyleSheet.create({
   },
   senseButtonText: { color: GOLD, fontWeight: "700", fontSize: 14, letterSpacing: 0.5 },
   declineText: { color: "rgba(255,255,255,0.6)", fontSize: 12 },
-  statusRow: {
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "rgba(212,175,122,0.25)",
-  },
-  statusText: { color: "rgba(212,175,122,0.7)", fontSize: 13, fontStyle: "italic" },
   continueButton: {
     backgroundColor: "rgba(212,175,122,0.12)",
     borderRadius: 8,

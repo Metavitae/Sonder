@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   NativeScrollEvent,
@@ -56,6 +56,21 @@ function WheelColumn({
 }) {
   const listRef = useRef<FlatList<string>>(null);
   const lastCommittedRef = useRef(selectedIndex);
+  // Real bug (founder screenshot, Part 68): the bold/highlighted row was
+  // driven by the `selectedIndex` prop, which only updates after a full
+  // round-trip through the parent's state (commit -> onChange -> re-render
+  // with a new prop) — a real frame or two behind the FlatList's actual
+  // live scroll position. Tracking highlight locally, updated on every
+  // scroll callback rather than only on committed changes, keeps the bold
+  // row pinned to whatever's actually under the selection band right now.
+  const [highlightedIndex, setHighlightedIndex] = useState(selectedIndex);
+
+  // Stays in sync with external resets (e.g. the day column's item count
+  // — and therefore its valid selectedIndex — changing when month/year
+  // clamps the day), not just the initial mount value.
+  useEffect(() => {
+    setHighlightedIndex(selectedIndex);
+  }, [selectedIndex]);
 
   const commit = useCallback(
     (rawIndex: number) => {
@@ -69,18 +84,22 @@ function WheelColumn({
     [items.length, onChange]
   );
 
-  const indexFromOffset = (offsetY: number) => Math.round(offsetY / ITEM_HEIGHT);
+  const indexFromOffset = (offsetY: number) =>
+    Math.max(0, Math.min(items.length - 1, Math.round(offsetY / ITEM_HEIGHT)));
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      commit(indexFromOffset(e.nativeEvent.contentOffset.y));
+      const index = indexFromOffset(e.nativeEvent.contentOffset.y);
+      setHighlightedIndex(index);
+      commit(index);
     },
-    [commit]
+    [commit, items.length]
   );
 
   const handleMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const index = indexFromOffset(e.nativeEvent.contentOffset.y);
+      setHighlightedIndex(index);
       commit(index);
       listRef.current?.scrollToOffset({ offset: index * ITEM_HEIGHT, animated: true });
     },
@@ -114,7 +133,7 @@ function WheelColumn({
       onScrollEndDrag={handleScrollEndDrag}
       renderItem={({ item, index }) => (
         <View style={styles.item}>
-          <Text style={[styles.itemText, index === selectedIndex && styles.itemTextSelected]}>
+          <Text style={[styles.itemText, index === highlightedIndex && styles.itemTextSelected]}>
             {item}
           </Text>
         </View>
