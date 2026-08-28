@@ -14,16 +14,12 @@ export function useIdleSleep() {
   const lastActivityRef = useRef(Date.now());
   const wasDreamingRef = useRef(false);
 
-  // TEMP DEBUG (Part 67) — remove once the trigger bug is root-caused.
-  console.log("[dreamdebug] useIdleSleep MOUNT, lastActivity=", lastActivityRef.current, new Date(lastActivityRef.current).toString());
-
   // Exposed so the caller can tell a genuine wake (was dreaming) apart from
   // ordinary activity that never let it get that far.
   const [justWoke, setJustWoke] = useState(false);
 
   const noteActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
-    console.log("[dreamdebug] noteActivity called, new lastActivity=", lastActivityRef.current);
     if (wasDreamingRef.current) {
       wasDreamingRef.current = false;
       setJustWoke(true);
@@ -34,26 +30,15 @@ export function useIdleSleep() {
   const clearJustWoke = useCallback(() => setJustWoke(false), []);
 
   useEffect(() => {
-    console.log("[dreamdebug] interval effect running, setting up setInterval");
     const id = setInterval(() => {
-      const now = Date.now();
-      const idleFor = now - lastActivityRef.current;
-      console.log("[dreamdebug] tick now=", now, new Date(now).toString(), "idleFor=", idleFor);
+      const idleFor = Date.now() - lastActivityRef.current;
       if (idleFor >= IDLE_THRESHOLD_MS) {
-        console.log("[dreamdebug] CONDITIONS MET -> setIsDreaming(true)");
         wasDreamingRef.current = true;
         setIsDreaming(true);
       }
     }, CHECK_INTERVAL_MS);
-    return () => {
-      console.log("[dreamdebug] interval effect CLEANUP (unmount or re-run)");
-      clearInterval(id);
-    };
+    return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    console.log("[dreamdebug] isDreaming state changed to", isDreaming);
-  }, [isDreaming]);
 
   // Part 63: a real jolt (FreefallStartle, mounted globally) should wake
   // Sonder from dreaming, same as noteActivity does for ordinary user
