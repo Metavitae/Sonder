@@ -3,6 +3,7 @@ import { pickColdStartMessage } from "./coldStartMessages";
 import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import type { Presence } from "./motion";
+import type { TraitSignal, TraitWeights } from "./characterTraits";
 
 // Set by the founder once the Render service exists — see server/README.md.
 // EXPO_PUBLIC_ vars are inlined at bundle time (Expo convention), so this
@@ -33,14 +34,15 @@ export type Mood = { warmth: Warmth; arousal: Arousal };
 
 const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
-type ChatResponse = { reply: string; mood?: Mood };
+type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal };
 
 async function requestChat(
   text: string,
   history: ChatMessage[],
   sessionOpening: boolean,
   openingPresence?: Presence,
-  headphonesConnected?: boolean
+  headphonesConnected?: boolean,
+  traitWeights?: TraitWeights
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -48,6 +50,11 @@ async function requestChat(
     );
   }
   const body: Record<string, unknown> = { message: text, history, sessionOpening };
+  // Per Part 72 — sent every turn, same stateless-per-request shape as
+  // headphones/presence below; the server never persists this.
+  if (traitWeights) {
+    body.traits = traitWeights;
+  }
   // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 9 —
   // only meaningful as an "opening" signal. Originally gated server-side on
   // history.length === 0, but Part 33's cross-session memory now restores
@@ -79,6 +86,7 @@ export function useSonderChat() {
   const [coldStartLine, setColdStartLine] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mood, setMood] = useState<Mood>(DEFAULT_MOOD);
+  const [traitSignal, setTraitSignal] = useState<TraitSignal>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set true the moment the cold-start line actually reveals — i.e. this
   // specific request has already run past COLD_START_REVEAL_MS, a genuine
@@ -122,7 +130,8 @@ export function useSonderChat() {
   const send = useCallback(async (
     text: string,
     openingPresence?: Presence,
-    headphonesConnected?: boolean
+    headphonesConnected?: boolean,
+    traitWeights?: TraitWeights
   ) => {
     if (!text.trim()) return;
     setError(null);
@@ -178,7 +187,8 @@ export function useSonderChat() {
           historyForRequest,
           sessionOpening,
           openingPresence,
-          headphonesConnected
+          headphonesConnected,
+          traitWeights
         );
       } catch (firstErr) {
         // Real bug found 2026-08-14 (founder's first live test, Part 24):
@@ -196,11 +206,13 @@ export function useSonderChat() {
           historyForRequest,
           sessionOpening,
           openingPresence,
-          headphonesConnected
+          headphonesConnected,
+          traitWeights
         );
       }
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
       if (data.mood) setMood(data.mood);
+      setTraitSignal(data.traitSignal ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -213,5 +225,5 @@ export function useSonderChat() {
     }
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, mood, send };
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send };
 }

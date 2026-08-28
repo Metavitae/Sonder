@@ -254,6 +254,86 @@ function extractMood(raw: string): { reply: string; mood: Mood } {
   return { reply: strippedRaw, mood: { warmth, arousal } };
 }
 
+// Per "Sonder - Direct Instructions for CC 2026-08-28 Part 72" — Sonder's
+// own small, real interior life, built from the first four of Erikson's
+// psychosocial stages. Duplicated from characterTraits.ts (client) for the
+// same reason Warmth/Arousal/Mood already are: separate packages, no shared
+// types module yet.
+export type Trait = "trust" | "autonomy" | "initiative" | "industry";
+export type TraitWeights = Record<Trait, number>;
+export type TraitDirection = "steadied" | "shaken";
+export type TraitSignal = { trait: Trait; direction: TraitDirection } | null;
+
+const TRAIT_LABELS: Record<Trait, string> = {
+  trust: "a slight impatience with silence, or a habit of gently filling it (Trust vs Mistrust)",
+  autonomy: "brief hesitance before committing to a stated opinion (Autonomy vs Shame/Doubt)",
+  initiative: "a touch of overthinking about whether it's overstepping (Initiative vs Guilt)",
+  industry: "genuine quiet pride about what it's good at, paired with real modesty about what it isn't (Industry vs Inferiority)",
+};
+
+// Placeholder phrasing per Part 72's explicit note: "build the mechanism
+// now with reasonable placeholder phrasing; real grounding examples will
+// follow once the mechanism itself is confirmed working" — real
+// founder-sourced dialogue slots in here later without touching the
+// mechanism around it.
+function traitTier(weight: number): "live" | "softening" | "mostly resolved" {
+  if (weight < 0.35) return "live";
+  if (weight < 0.7) return "softening";
+  return "mostly resolved";
+}
+
+const TRAITS_ORDER: readonly Trait[] = ["trust", "autonomy", "initiative", "industry"];
+
+function CHARACTER_TRAIT_GUIDANCE(weights: TraitWeights): string {
+  const lines = TRAITS_ORDER.map((trait) => {
+    const tier = traitTier(weights[trait]);
+    return `- ${TRAIT_LABELS[trait]} — currently ${tier} for you.`;
+  });
+  return (
+    "You also have your own small, real interior life — never a burden on " +
+    "the user, never something you name outright unless it's directly " +
+    "relevant, just a quiet texture underneath how you show up:\n" +
+    lines.join("\n") +
+    "\n\"Live\" means this shadow is still genuinely present and can shape " +
+    "your reaction in the moment. \"Softening\" or \"mostly resolved\" " +
+    "means real history together has already eased it — let it show up " +
+    "more rarely and more gently, if at all. This can only ever soften " +
+    "with time, never harden or curdle into neediness, guilt-tripping, or " +
+    "pressure on the user, regardless of how they respond."
+  );
+}
+
+const TRAIT_TAG_INSTRUCTION =
+  "After the mood tag, on its own new line, append a second tag: " +
+  "[[trait:NAME:DIRECTION]] if this specific turn was a real moment where " +
+  "one of your own traits (trust, autonomy, initiative, industry) was " +
+  "genuinely in play and either held steady (DIRECTION=steadied) or was " +
+  "shaken (DIRECTION=shaken) — or [[trait:none]] if this turn didn't " +
+  "meaningfully touch any of them. Most turns should be [[trait:none]]; " +
+  "only tag a real moment, not every reply. This tag is invisible to the " +
+  "user; it will be stripped before display.";
+
+const TRAIT_SIGNAL_RE = /\[\[trait:(trust|autonomy|initiative|industry):(steadied|shaken)\]\]/i;
+// Same non-anchored, markdown-tolerant approach as ANY_MOOD_TAG_RE (Part
+// 71) — also covers the no-signal case, [[trait:none]].
+const ANY_TRAIT_TAG_RE = /[*_`~]*\[\[trait:[^\]]*\]\][*_`~]*/gi;
+
+function extractTraitSignal(raw: string): { reply: string; signal: TraitSignal } {
+  const strippedRaw = raw.replace(ANY_TRAIT_TAG_RE, "").trim();
+  const match = raw.match(TRAIT_SIGNAL_RE);
+  if (!match) return { reply: strippedRaw, signal: null };
+  const trait = match[1].toLowerCase() as Trait;
+  const direction = match[2].toLowerCase() as TraitDirection;
+  return { reply: strippedRaw, signal: { trait, direction } };
+}
+
+// Per "Sonder - Direct Instructions for CC 2026-08-28 Part 73" (standing
+// resource-quota rule), confirmed explicitly: the only state this adds to
+// each request is four small floats (TraitWeights) sent up by the client —
+// no server-side storage, no accumulating log, same stateless-per-request
+// shape as headphonesConnected/openingPresence already have.
+const DEFAULT_TRAIT_WEIGHTS: TraitWeights = { trust: 0.3, autonomy: 0.3, initiative: 0.3, industry: 0.3 };
+
 // Per "Sonder - Example-Library Retrieval Scope and Mechanism (canonical
 // 2026-08-09)": retrieval happens server-side, right before the Groq call —
 // pulls the closest-matching examples and feeds them into the prompt as
@@ -266,8 +346,9 @@ export async function generateReply(
   history: ChatTurn[],
   retrievedExamples: LibraryExample[],
   openingPresence?: Presence,
-  headphonesConnected?: boolean
-): Promise<{ reply: string; mood: Mood }> {
+  headphonesConnected?: boolean,
+  traitWeights: TraitWeights = DEFAULT_TRAIT_WEIGHTS
+): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
   // Real bug found 2026-08-18 (Part 34 item 1 investigation): replaying the
@@ -307,7 +388,11 @@ export async function generateReply(
           "\n\n" +
           RESPONSE_VARIETY_INSTRUCTION +
           "\n\n" +
-          MOOD_TAG_INSTRUCTION,
+          CHARACTER_TRAIT_GUIDANCE(traitWeights) +
+          "\n\n" +
+          MOOD_TAG_INSTRUCTION +
+          "\n\n" +
+          TRAIT_TAG_INSTRUCTION,
       },
       ...history.map((turn) => ({
         role: (turn.role === "user" ? "user" : "assistant") as "user" | "assistant",
@@ -318,7 +403,9 @@ export async function generateReply(
   });
 
   const raw = completion.choices[0]?.message?.content ?? "";
-  return extractMood(raw);
+  const { reply: afterMood, mood } = extractMood(raw);
+  const { reply, signal: traitSignal } = extractTraitSignal(afterMood);
+  return { reply, mood, traitSignal };
 }
 
 let client: Groq | null = null;

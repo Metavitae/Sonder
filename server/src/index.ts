@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply, type ChatTurn, type Presence } from "./groq.js";
+import { generateReply, type ChatTurn, type Presence, type Trait, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -30,6 +30,29 @@ function parseHistory(value: unknown): ChatTurn[] {
     }
   }
   return turns.slice(-MAX_HISTORY_TURNS);
+}
+
+const TRAIT_NAMES: readonly Trait[] = ["trust", "autonomy", "initiative", "industry"];
+
+// Per Part 72/73: the server never stores this, just relays it into the
+// prompt for the duration of this one request — a malformed/missing value
+// per trait falls back independently rather than discarding the whole
+// object, same defensive shape as parseHistory above.
+function parseTraitWeights(value: unknown): TraitWeights | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const src = value as Record<string, unknown>;
+  const weights = {} as TraitWeights;
+  let any = false;
+  for (const t of TRAIT_NAMES) {
+    const n = src[t];
+    if (typeof n === "number" && n >= 0 && n <= 1) {
+      weights[t] = n;
+      any = true;
+    } else {
+      weights[t] = 0.3;
+    }
+  }
+  return any ? weights : undefined;
 }
 
 const app = express();
@@ -94,6 +117,7 @@ app.post("/chat", async (req, res) => {
   // Per Part 22/25 item 4 — unlike presence, an ongoing state: honored on
   // every turn the client reports it, not just the first.
   const headphonesConnected = req.body?.headphones === true;
+  const traitWeights = parseTraitWeights(req.body?.traits);
   try {
     // Waits out any in-flight startup load instead of racing it — a real
     // fix, not just a longer window to still race within. Inside the try
@@ -104,14 +128,15 @@ app.post("/chat", async (req, res) => {
     // Retrieval keys off the current message only, not history — see
     // groq.ts's comment on generateReply for why.
     const examples = await retrieveTopExamples(message);
-    const { reply, mood } = await generateReply(
+    const { reply, mood, traitSignal } = await generateReply(
       message,
       history,
       examples,
       openingPresence,
-      headphonesConnected
+      headphonesConnected,
+      traitWeights
     );
-    res.json({ reply, mood, retrievedExampleIds: examples.map((e) => e.id) });
+    res.json({ reply, mood, traitSignal, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });

@@ -20,6 +20,7 @@ import { useHeadphonesConnected } from "../lib/audioRoute";
 import { usePreferredVoice, USER_VOICES } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
 import { useSpeak } from "../lib/speak";
+import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
@@ -48,7 +49,8 @@ const HEADPHONES_OVERLAY_OPACITY = 0.12;
 // No camera here — that's index.tsx's separate concern (the needs-boundary
 // face-tracking PoC). This screen never requests camera permission.
 export default function ChatScreen() {
-  const { messages, isWaiting, coldStartLine, error, mood, send } = useSonderChat();
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send } = useSonderChat();
+  const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
   const { color, intensity } = moodToMist(mood);
   const insets = useSafeAreaInsets();
@@ -120,6 +122,13 @@ export default function ChatScreen() {
   // above, shared with the dream/wake lines).
   useSpeakReplies(messages, voice);
 
+  // Part 72 — each reply can flag a real trust/autonomy/initiative/industry
+  // moment; applyTraitSignal only actually moves a stored weight once a
+  // real streak forms (characterTraits.ts), so most turns are a no-op here.
+  useEffect(() => {
+    applyTraitSignal(traitSignal);
+  }, [traitSignal, applyTraitSignal]);
+
   const handleInputChange = (text: string) => {
     noteActivity();
     setInput(text);
@@ -129,7 +138,7 @@ export default function ChatScreen() {
     const text = input;
     setInput("");
     noteActivity();
-    send(text, presence, headphonesConnected);
+    send(text, presence, headphonesConnected, traitWeights ?? undefined);
     // Keep the cursor live in the field after sending, rather than making
     // the user tap back in every time — pressing the Send button (as
     // opposed to the keyboard's own submit key) blurs the input by default.
