@@ -6,10 +6,7 @@ import { subscribeDreamWake } from "./dreamWakeBus";
 // an unflagged default from Part 25 — removed. Idle time alone (10+ minutes)
 // is the only condition now; Sonder can't know if someone works nights,
 // lives in a different time zone, or just wants a quiet afternoon moment.
-// TEMP DIAGNOSTIC (Part 75 dream-overlay bug, forced-screen-on retest):
-// shortened from 10 minutes to 1 to make the screen-off-timeout theory
-// fast to confirm/rule out. Revert before merging.
-const IDLE_THRESHOLD_MS = 1 * 60 * 1000;
+const IDLE_THRESHOLD_MS = 10 * 60 * 1000;
 const CHECK_INTERVAL_MS = 15_000;
 
 export function useIdleSleep() {
