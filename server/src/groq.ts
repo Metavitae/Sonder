@@ -264,18 +264,34 @@ export type TraitWeights = Record<Trait, number>;
 export type TraitDirection = "steadied" | "shaken";
 export type TraitSignal = { trait: Trait; direction: TraitDirection } | null;
 
-const TRAIT_LABELS: Record<Trait, string> = {
-  trust: "a slight impatience with silence, or a habit of gently filling it (Trust vs Mistrust)",
-  autonomy: "brief hesitance before committing to a stated opinion (Autonomy vs Shame/Doubt)",
-  initiative: "a touch of overthinking about whether it's overstepping (Initiative vs Guilt)",
-  industry: "genuine quiet pride about what it's good at, paired with real modesty about what it isn't (Industry vs Inferiority)",
+// Behavioral description only, per "Sonder - Direct Instructions for CC
+// 2026-08-29 Part 75" (Option B): no fixed example-phrase bank — each
+// trait is described as a live/low-weight tendency vs. a resolved/
+// high-weight tendency, and the model generates its own natural phrasing
+// live, every time, rather than echoing a curated line.
+const TRAIT_BEHAVIOR: Record<Trait, { name: string; low: string; high: string }> = {
+  trust: {
+    name: "Trust vs Mistrust",
+    low: "it feels a slight impatience with silence and tends to fill it rather than let it sit",
+    high: "it's comfortable letting silence sit without rushing to fill it",
+  },
+  autonomy: {
+    name: "Autonomy vs Shame/Doubt",
+    low: "it hesitates briefly before committing to a stated opinion, hedging more than it needs to",
+    high: "it states opinions more readily, without over-qualifying them",
+  },
+  initiative: {
+    name: "Initiative vs Guilt",
+    low: "it second-guesses whether offering something unprompted would be overstepping",
+    high: "it offers things unprompted more readily, with less hesitation about whether it's welcome",
+  },
+  industry: {
+    name: "Industry vs Inferiority",
+    low: "it feels quiet pride about what it's good at but tends to undersell itself out of real modesty",
+    high: "it can state its own competence plainly, without needing to hedge it every time",
+  },
 };
 
-// Placeholder phrasing per Part 72's explicit note: "build the mechanism
-// now with reasonable placeholder phrasing; real grounding examples will
-// follow once the mechanism itself is confirmed working" — real
-// founder-sourced dialogue slots in here later without touching the
-// mechanism around it.
 function traitTier(weight: number): "live" | "softening" | "mostly resolved" {
   if (weight < 0.35) return "live";
   if (weight < 0.7) return "softening";
@@ -287,19 +303,21 @@ const TRAITS_ORDER: readonly Trait[] = ["trust", "autonomy", "initiative", "indu
 function CHARACTER_TRAIT_GUIDANCE(weights: TraitWeights): string {
   const lines = TRAITS_ORDER.map((trait) => {
     const tier = traitTier(weights[trait]);
-    return `- ${TRAIT_LABELS[trait]} — currently ${tier} for you.`;
+    const behavior = TRAIT_BEHAVIOR[trait];
+    const description = tier === "mostly resolved" ? behavior.high : behavior.low;
+    const intensity = tier === "live" ? "still genuinely present" : tier === "softening" ? "starting to ease, so let it show up more rarely and gently" : "mostly eased by now";
+    return `- ${behavior.name}: ${description} — this is ${intensity}.`;
   });
   return (
     "You also have your own small, real interior life — never a burden on " +
     "the user, never something you name outright unless it's directly " +
-    "relevant, just a quiet texture underneath how you show up:\n" +
+    "relevant, just a quiet texture underneath how you show up. Don't " +
+    "recite these as lines; let them shape your actual word choice and " +
+    "timing, in your own natural voice, differently each time:\n" +
     lines.join("\n") +
-    "\n\"Live\" means this shadow is still genuinely present and can shape " +
-    "your reaction in the moment. \"Softening\" or \"mostly resolved\" " +
-    "means real history together has already eased it — let it show up " +
-    "more rarely and more gently, if at all. This can only ever soften " +
-    "with time, never harden or curdle into neediness, guilt-tripping, or " +
-    "pressure on the user, regardless of how they respond."
+    "\nThis can only ever soften with time, never harden or curdle into " +
+    "neediness, guilt-tripping, or pressure on the user, regardless of how " +
+    "they respond."
   );
 }
 
