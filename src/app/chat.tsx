@@ -55,6 +55,7 @@ export default function ChatScreen() {
   const { color, intensity } = moodToMist(mood);
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
   // Per Part 22/25 item 9 — read continuously, but only the reading at the
   // moment the opening send fires actually matters; useSonderChat only acts
   // on it when this is the first turn of the session.
@@ -182,7 +183,12 @@ export default function ChatScreen() {
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        >
           {messages.map((m, i) => (
             <View
               key={i}
