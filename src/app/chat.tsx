@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Animated as RNAnimated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -74,7 +75,13 @@ export default function ChatScreen() {
   const { isDreaming, justWoke, noteActivity, clearJustWoke } = useIdleSleep();
   const [dreamLine, setDreamLine] = useState("");
   const [wakeLine, setWakeLine] = useState<string | null>(null);
-  const dreamOverlay = useSharedValue(0);
+  // Diagnostic per "Sonder - Direct Instructions for CC 2026-08-29 Part 75"
+  // item 4: swapped from Reanimated's useSharedValue/withTiming to plain
+  // RN Animated, to isolate whether the Part 66/67 paint bug (state fires
+  // correctly, dream overlay never visibly renders) is specific to
+  // Reanimated's worklet/UI-thread path on this device. Diagnostic only —
+  // not a confirmed fix until verified live.
+  const dreamOverlayAnim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
     if (isDreaming) {
@@ -82,9 +89,13 @@ export default function ChatScreen() {
       setDreamLine(line);
       speak(line, voice, { instant: true });
     }
-    dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
+    RNAnimated.timing(dreamOverlayAnim, {
+      toValue: isDreaming ? DREAM_OVERLAY_OPACITY : 0,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDreaming, dreamOverlay]);
+  }, [isDreaming, dreamOverlayAnim]);
 
   useEffect(() => {
     if (!justWoke) return;
@@ -96,8 +107,6 @@ export default function ChatScreen() {
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justWoke, clearJustWoke]);
-
-  const dreamOverlayStyle = useAnimatedStyle(() => ({ opacity: dreamOverlay.value }));
 
   // Item 4 — read continuously, applied to both the ambient visual (below)
   // and sent with every turn (not opening-gated like presence) so Sonder's
@@ -152,9 +161,9 @@ export default function ChatScreen() {
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.headphonesOverlay, headphonesOverlayStyle]}
       />
-      <Animated.View
+      <RNAnimated.View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFillObject, styles.dreamOverlay, dreamOverlayStyle]}
+        style={[StyleSheet.absoluteFillObject, styles.dreamOverlay, { opacity: dreamOverlayAnim }]}
       />
       <View style={[styles.voicePicker, { top: 12 + insets.top }]}>
         {USER_VOICES.map((v) => (
