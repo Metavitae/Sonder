@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSonderChat } from "../lib/useSonderChat";
@@ -16,6 +17,7 @@ import { moodToMist } from "../lib/moodToMist";
 import { usePresence } from "../lib/motion";
 import { useIdleSleep } from "../lib/useIdleSleep";
 import { pickDreamLine, pickWakeLine } from "../lib/sleepBit";
+import { notifyDreaming } from "../lib/dreamNotify";
 import { useHeadphonesConnected } from "../lib/audioRoute";
 import { usePreferredVoice, USER_VOICES } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
@@ -82,6 +84,10 @@ export default function ChatScreen() {
       const line = pickDreamLine();
       setDreamLine(line);
       speak(line, voice, { instant: true });
+      // Part 76 item 1 (Option 3) — the durable signal, survives the
+      // screen being locked; the dim overlay + bubble below are a bonus
+      // for whenever the screen does happen to be on, not the real path.
+      notifyDreaming(line);
     }
     dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +98,10 @@ export default function ChatScreen() {
     const line = pickWakeLine();
     setWakeLine(line);
     speak(line, voice, { instant: true });
+    // A real wake moment always has the screen on (it's triggered by real
+    // interaction — noteActivity), so a haptic pulse here is a genuine,
+    // reliable cue rather than depending on screen state like the overlay.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     clearJustWoke();
     const id = setTimeout(() => setWakeLine(null), WAKE_LINE_DURATION_MS);
     return () => clearTimeout(id);

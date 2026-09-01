@@ -1,6 +1,7 @@
 import { LogBox } from "react-native";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
@@ -8,6 +9,21 @@ import { loadOnboardingState } from "../lib/onboardingStorage";
 import { OnboardingGateContext } from "../lib/onboardingGate";
 
 SplashScreen.preventAutoHideAsync();
+
+// Per "Sonder - Direct Instructions for CC 2026-08-31 Part 76" item 1 —
+// dreamNotify.ts's dream-state notification needs to actually show/alert
+// even while the app is foregrounded (the idle chat screen is the exact
+// case this fires from), not just when backgrounded — Expo's default
+// handler suppresses the alert in that case. Set once, app-wide, at the
+// true root rather than per-screen.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 // Accepted tradeoff (setup.tsx, Part 36-39 build order step 5): the
 // birthdate wheel's three FlatLists are deliberately nested inside a
