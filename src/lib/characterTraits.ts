@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-28 Part 72" — Sonder's
 // own small, real interior life, built from the first four of Erikson's
@@ -9,6 +9,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // through real relationship history. Hard safety rule (non-negotiable, Part
 // 72): a weight may only ever move toward 1 (softer) — never back down —
 // regardless of how the user responds.
+//
+// Per Part 76 item 5, corrected by Part 77: Erikson is named here as a
+// deliberate design choice — Western developmental psychology, not a
+// claimed universal default — and it's not Sonder's only psychological
+// lens. Two more real frameworks (Ubuntu, Buddhist anatta) sit alongside it
+// as broader interpretive framing on the server side (server/src/groq.ts's
+// PSYCHOLOGICAL_FRAMING_NOTE) rather than as more mechanical trait
+// variables here — see that file for why they don't belong in this weight
+// system.
 export type Trait = "trust" | "autonomy" | "initiative" | "industry";
 export type TraitWeights = Record<Trait, number>;
 export type TraitDirection = "steadied" | "shaken";
@@ -20,6 +29,15 @@ export const TRAITS: readonly Trait[] = ["trust", "autonomy", "initiative", "ind
 // resource-quota rule): this entire store is 4 weights + 4 tiny streak
 // records — a fixed handful of numbers, never an accumulating log. Confirmed
 // explicitly per Part 73's request to state this when reporting Part 72.
+//
+// Per "Sonder - Direct Instructions for CC 2026-08-31 Part 76" item 4 (Board
+// flag, Regulatory/Tech-API Counsel): these weights can reveal real
+// psychological patterns and weren't encrypted at rest — plain AsyncStorage
+// on Android. Moved to expo-secure-store, which is Android Keystore-backed
+// (EncryptedSharedPreferences) rather than a bespoke encryption scheme.
+// SecureStore's ~2048-byte practical limit on Android is not a real
+// constraint here — the payload is the same fixed handful of numbers noted
+// above, nowhere near that size.
 const STORAGE_KEY = "sonder_character_traits_v1";
 
 // A same-direction streak this long is what "a genuine real pattern... over
@@ -52,7 +70,7 @@ function freshState(): StoredState {
 
 async function loadState(): Promise<StoredState> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await SecureStore.getItemAsync(STORAGE_KEY);
     if (!raw) return freshState();
     const parsed = JSON.parse(raw);
     const fresh = freshState();
@@ -70,7 +88,7 @@ async function loadState(): Promise<StoredState> {
 }
 
 function persistState(state: StoredState): void {
-  AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
+  SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
 }
 
 // The asymmetric core of the hard safety rule: this function has no code

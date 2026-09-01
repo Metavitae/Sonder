@@ -83,7 +83,8 @@
           "color": "#208AEF"
         }
       ],
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
