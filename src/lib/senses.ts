@@ -2,6 +2,7 @@ import { Camera } from "react-native-vision-camera";
 import * as Calendar from "expo-calendar";
 import * as Notifications from "expo-notifications";
 import * as LocalAuthentication from "expo-local-authentication";
+import * as Location from "expo-location";
 import { Accelerometer } from "expo-sensors";
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
 import SonderAudioRoute from "../../modules/sonder-audio-route/src/SonderAudioRouteModule";
@@ -29,7 +30,8 @@ export type SenseId =
   | "microphone"
   | "calendar"
   | "notifications"
-  | "biometric";
+  | "biometric"
+  | "location";
 
 export type Sense = {
   id: SenseId;
@@ -159,6 +161,24 @@ const biometric: Sense = {
   },
 };
 
+// "Sonder - Direct Instructions for CC 2026-09-14 - Proactive conversation
+// and coarse-location weather" item 1: approximate location only (fine
+// location is blocked in app.json), used solely to mention local weather in
+// conversation (localContext.ts). A real permit on this panel like
+// calendar/notifications/biometric — never shareable, never part of
+// allSensesGranted()'s tier-up gate.
+const location: Sense = {
+  id: "location",
+  label: "Location",
+  shareable: false,
+  requiresAction: true,
+  // Android's network-based approximate location exists on every device
+  // this app targets; whether it's switched on is a grant question below.
+  isSupported: async () => true,
+  isGranted: async () => (await Location.getForegroundPermissionsAsync()).status === "granted",
+  request: async () => (await Location.requestForegroundPermissionsAsync()).status === "granted",
+};
+
 export const ALL_SENSES: Sense[] = [
   vision,
   motion,
@@ -167,6 +187,7 @@ export const ALL_SENSES: Sense[] = [
   calendar,
   notifications,
   biometric,
+  location,
 ];
 
 // Senses this specific device actually has — the Permits panel maps over

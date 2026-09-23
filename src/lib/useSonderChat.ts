@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
+import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import type { Presence } from "./motion";
@@ -43,7 +44,8 @@ async function requestChat(
   openingPresence?: Presence,
   headphonesConnected?: boolean,
   traitWeights?: TraitWeights,
-  voiceEnabled = true
+  voiceEnabled = true,
+  opener = false
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -78,6 +80,13 @@ async function requestChat(
   if (!voiceEnabled) {
     body.voice = false;
   }
+  // 2026-09-14 proactive-conversation instructions, items 1-3: local time
+  // every turn (phone clock, no permission), weather only if coarse
+  // location was granted — see localContext.ts for the privacy shape.
+  body.localTime = localTimeLabel();
+  const weather = await currentWeatherSummary();
+  if (weather) body.weather = weather;
+  if (opener) body.opener = true;
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -130,6 +139,27 @@ export function useSonderChat(onVoiceOn?: () => void) {
       if (cancelled) return;
       if (stored.length > 0) setMessages(stored);
       hasLoadedHistoryRef.current = true;
+      // Item 3: no history at all means this is the first-ever
+      // conversation — Sonder speaks first instead of leaving someone new
+      // to companion apps facing an empty chat. Fire-and-forget: send()
+      // doesn't wait on it, and if the user types first, the opener is
+      // dropped rather than landing after their message.
+      if (stored.length === 0) {
+        setIsWaiting(true);
+        requestChat("", [], false, undefined, undefined, undefined, true, true)
+          .then((data) => {
+            if (cancelled || !data.reply) return;
+            setMessages((prev) => (prev.length === 0 ? [{ role: "sonder", text: data.reply }] : prev));
+            if (data.mood) setMood(data.mood);
+          })
+          .catch(() => {
+            // An opener is a nicety — a failure here just leaves the
+            // ordinary empty chat, never an error banner.
+          })
+          .finally(() => {
+            if (!cancelled) setIsWaiting(false);
+          });
+      }
     });
     return () => {
       cancelled = true;
