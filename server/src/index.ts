@@ -118,6 +118,9 @@ app.post("/chat", async (req, res) => {
   // every turn the client reports it, not just the first.
   const headphonesConnected = req.body?.headphones === true;
   const traitWeights = parseTraitWeights(req.body?.traits);
+  // Voice on/off toggle — only an explicit false means off, so builds that
+  // predate the toggle (and never send it) keep the voice-on default.
+  const spokenAloud = req.body?.voice !== false;
   try {
     // Waits out any in-flight startup load instead of racing it — a real
     // fix, not just a longer window to still race within. Inside the try
@@ -128,15 +131,16 @@ app.post("/chat", async (req, res) => {
     // Retrieval keys off the current message only, not history — see
     // groq.ts's comment on generateReply for why.
     const examples = await retrieveTopExamples(message);
-    const { reply, mood, traitSignal } = await generateReply(
+    const { reply, mood, traitSignal, voiceOn } = await generateReply(
       message,
       history,
       examples,
       openingPresence,
       headphonesConnected,
-      traitWeights
+      traitWeights,
+      spokenAloud
     );
-    res.json({ reply, mood, traitSignal, retrievedExampleIds: examples.map((e) => e.id) });
+    res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });

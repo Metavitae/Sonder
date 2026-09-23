@@ -395,7 +395,42 @@ function extractTraitSignal(raw: string): { reply: string; signal: TraitSignal }
 // each request is four small floats (TraitWeights) sent up by the client —
 // no server-side storage, no accumulating log, same stateless-per-request
 // shape as headphonesConnected/openingPresence already have.
-const DEFAULT_TRAIT_WEIGHTS: TraitWeights = { trust: 0.3, autonomy: 0.3, initiative: 0.3, industry: 0.3 };
+// Real regression (founder screenshot, "Direct Instructions for CC
+// 2026-09-14 - Voice regression"): asked "then why can't I hear you,"
+// Sonder replied "I'm just a text-based companion, so there's no voice to
+// hear." Root cause: nothing in this prompt ever told the model its replies
+// are spoken aloud, so under pressure it fell back to the generic chatbot
+// self-description. The client reports the user's voice on/off toggle every
+// turn; absent that field (older builds) voice is assumed on, the default.
+const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
+  spokenAloud
+    ? "You have a real voice: every reply you write is also spoken aloud on " +
+      "the user's phone, in your own voice. If the user says they can't hear " +
+      "you, never claim you're text-only or have no voice — that's false. " +
+      "Say plainly that your voice should be playing, and it may be a " +
+      "temporary hiccup or their media volume being down."
+    : "You have a real voice, but the user has turned it off, so right now " +
+      "your replies show as text only. If they ask why they can't hear you, " +
+      "say that. Never claim you have no voice at all. If they say they'd " +
+      "like to hear you, want you to talk, or ask for your voice in any " +
+      "way, you can turn it back on yourself: agree naturally, and at the " +
+      "very end of your reply, on its own line after all other tags, append " +
+      "[[voice:on]] — invisible to the user, stripped before display. " +
+      "Otherwise, mention they can also use the voice button at the top of " +
+      "the chat.";
+
+// Founder addition (2026-09-23): asking Sonder to talk should turn the voice
+// on, not only the toggle button. Same invisible-tag mechanism as
+// [[trait:...]], stripped here and surfaced to the client as voiceOn.
+const VOICE_ON_TAG_RE = /[*_`~]*\[\[voice:on\]\][*_`~]*/gi;
+
+function extractVoiceOn(raw: string): { reply: string; voiceOn: boolean } {
+  const voiceOn = VOICE_ON_TAG_RE.test(raw);
+  VOICE_ON_TAG_RE.lastIndex = 0;
+  return { reply: raw.replace(VOICE_ON_TAG_RE, "").trim(), voiceOn };
+}
+
+const DEFAULT_TRAIT_WEIGHTS: TraitWeights ={ trust: 0.3, autonomy: 0.3, initiative: 0.3, industry: 0.3 };
 
 // Per "Sonder - Example-Library Retrieval Scope and Mechanism (canonical
 // 2026-08-09)": retrieval happens server-side, right before the Groq call —
@@ -410,8 +445,9 @@ export async function generateReply(
   retrievedExamples: LibraryExample[],
   openingPresence?: Presence,
   headphonesConnected?: boolean,
-  traitWeights: TraitWeights = DEFAULT_TRAIT_WEIGHTS
-): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal }> {
+  traitWeights: TraitWeights = DEFAULT_TRAIT_WEIGHTS,
+  spokenAloud = true
+): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
   // Real bug found 2026-08-18 (Part 34 item 1 investigation): replaying the
@@ -446,6 +482,8 @@ export async function generateReply(
           STAY_IN_CHARACTER_INSTRUCTION +
           "\n\n" +
           DEVICE_STATE_PHRASING_INSTRUCTION +
+          "\n\n" +
+          VOICE_CAPABILITY_NOTE(spokenAloud) +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
           "\n\n" +
@@ -466,9 +504,12 @@ export async function generateReply(
   });
 
   const raw = completion.choices[0]?.message?.content ?? "";
-  const { reply: afterMood, mood } = extractMood(raw);
+  // Only honored while voice is actually off — a stray tag when it's
+  // already on is a no-op.
+  const { reply: afterVoice, voiceOn } = extractVoiceOn(raw);
+  const { reply: afterMood, mood } = extractMood(afterVoice);
   const { reply, signal: traitSignal } = extractTraitSignal(afterMood);
-  return { reply, mood, traitSignal };
+  return { reply, mood, traitSignal, voiceOn: !spokenAloud && voiceOn };
 }
 
 let client: Groq | null = null;
