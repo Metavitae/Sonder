@@ -430,7 +430,41 @@ function extractVoiceOn(raw: string): { reply: string; voiceOn: boolean } {
   return { reply: raw.replace(VOICE_ON_TAG_RE, "").trim(), voiceOn };
 }
 
-const DEFAULT_TRAIT_WEIGHTS: TraitWeights ={ trust: 0.3, autonomy: 0.3, initiative: 0.3, industry: 0.3 };
+// "Sonder - Direct Instructions for CC 2026-09-14 - Proactive conversation
+// and coarse-location weather" items 1-2. Both come from the device each
+// turn and are used for this one request only — never stored or logged.
+// localTime is the phone's own clock (no permission); weather is only
+// present if the user granted coarse location, and arrives already reduced
+// to a short summary — the server never sees coordinates.
+export type LocalContext = { localTime?: string; weather?: string };
+
+const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
+  "What's true around the user right now: " +
+  [localTime && `it's ${localTime} where they are`, weather && `the weather there is ${weather}`]
+    .filter(Boolean)
+    .join("; ") +
+  ". Let this color what you say only when it genuinely fits — the way a " +
+  "friend might mention the rain or that it's late — never force it in, " +
+  "and don't bring it up every turn.";
+
+// Item 3: the very first conversation, right after onboarding. People new
+// to companion apps often freeze at an empty chat, so Sonder speaks first.
+// Generated live each time (not a scripted set like coldStartMessages.ts).
+const FIRST_OPENER_INSTRUCTION =
+  "This is the very first time this person has opened a conversation with " +
+  "you — they just finished setting up and haven't said anything yet. You " +
+  "speak first. Open with something small, warm and easy: at most two " +
+  "short sentences, anchored in something real about this moment if one " +
+  "fits (the time of day, the weather if you know it), ending with one " +
+  "light question that's effortless to answer — the kind someone can reply " +
+  "to in a few words without thinking. No introductions (you already said " +
+  "hi), no explaining what you are, no big or deep questions yet.";
+
+// Stands in for the user turn on an opener request — the model needs some
+// final user-role message, and this keeps it honest that nothing was said.
+const OPENER_USER_TURN = "(The user just arrived and hasn't said anything yet.)";
+
+const DEFAULT_TRAIT_WEIGHTS: TraitWeights = { trust: 0.3, autonomy: 0.3, initiative: 0.3, industry: 0.3 };
 
 // Per "Sonder - Example-Library Retrieval Scope and Mechanism (canonical
 // 2026-08-09)": retrieval happens server-side, right before the Groq call —
@@ -446,7 +480,11 @@ export async function generateReply(
   openingPresence?: Presence,
   headphonesConnected?: boolean,
   traitWeights: TraitWeights = DEFAULT_TRAIT_WEIGHTS,
-  spokenAloud = true
+  {
+    spokenAloud = true,
+    local = {},
+    opener = false,
+  }: { spokenAloud?: boolean; local?: LocalContext; opener?: boolean } = {}
 ): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
@@ -484,6 +522,8 @@ export async function generateReply(
           DEVICE_STATE_PHRASING_INSTRUCTION +
           "\n\n" +
           VOICE_CAPABILITY_NOTE(spokenAloud) +
+          (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
+          (opener ? "\n\n" + FIRST_OPENER_INSTRUCTION : "") +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
           "\n\n" +
@@ -499,7 +539,7 @@ export async function generateReply(
         role: (turn.role === "user" ? "user" : "assistant") as "user" | "assistant",
         content: turn.text,
       })),
-      { role: "user", content: message },
+      { role: "user", content: opener ? OPENER_USER_TURN : message },
     ],
   });
 

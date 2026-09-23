@@ -92,9 +92,20 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", modelReady, uptimeMs: Date.now() - startedAt });
 });
 
+// Short free-text device context (local time, weather summary) — capped and
+// type-checked so a buggy client can't smuggle a long prompt in here.
+function parseShortText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 80
+    ? value.trim()
+    : undefined;
+}
+
 app.post("/chat", async (req, res) => {
-  const message = req.body?.message;
-  if (typeof message !== "string" || message.trim().length === 0) {
+  // First-conversation opener (2026-09-14 proactive instructions, item 3):
+  // Sonder speaks first, so there's no user message to require.
+  const opener = req.body?.opener === true;
+  const message = opener ? "" : req.body?.message;
+  if (!opener && (typeof message !== "string" || message.trim().length === 0)) {
     res.status(400).json({ error: "message (non-empty string) is required" });
     return;
   }
@@ -121,6 +132,10 @@ app.post("/chat", async (req, res) => {
   // Voice on/off toggle — only an explicit false means off, so builds that
   // predate the toggle (and never send it) keep the voice-on default.
   const spokenAloud = req.body?.voice !== false;
+  const local = {
+    localTime: parseShortText(req.body?.localTime),
+    weather: parseShortText(req.body?.weather),
+  };
   try {
     // Waits out any in-flight startup load instead of racing it — a real
     // fix, not just a longer window to still race within. Inside the try
@@ -130,7 +145,7 @@ app.post("/chat", async (req, res) => {
     await modelReadyPromise;
     // Retrieval keys off the current message only, not history — see
     // groq.ts's comment on generateReply for why.
-    const examples = await retrieveTopExamples(message);
+    const examples = opener ? [] : await retrieveTopExamples(message);
     const { reply, mood, traitSignal, voiceOn } = await generateReply(
       message,
       history,
@@ -138,7 +153,7 @@ app.post("/chat", async (req, res) => {
       openingPresence,
       headphonesConnected,
       traitWeights,
-      spokenAloud
+      { spokenAloud, local, opener }
     );
     res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
