@@ -4,9 +4,11 @@ import type { UserVoice } from "./voicePreference";
 import { useSpeak } from "./speak";
 
 // Per "Sonder - Voice Two-Phase Plan (canonical 2026-08-17)" Phase 1 —
-// speaks each new Sonder reply aloud in the user's chosen voice
-// (voicePreference.ts), via the shared speak pipeline (speak.ts).
-export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice) {
+// speaks each new Sonder reply aloud in Sonder's voice (voicePreference.ts),
+// via the shared speak pipeline (speak.ts). Replies that arrive while voice
+// is off are still counted as handled — turning it back on later doesn't
+// read out a backlog.
+export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice, enabled: boolean) {
   // Real bug found 2026-08-17 (Part 32 crisis-tripwire verification): -1,
   // not 0 — the "first mount" guard below used to compare against 0, which
   // collides with a *legitimate* first-ever messages.length of 0. That
@@ -30,7 +32,9 @@ export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice) {
     const newOnes = messages.slice(spokenCountRef.current);
     spokenCountRef.current = messages.length;
     const lastReply = [...newOnes].reverse().find((m) => m.role === "sonder");
-    if (!lastReply) return;
+    if (!lastReply || !enabled) return;
     speak(lastReply.text, voice);
+    // `enabled` read at the moment a reply lands, not a trigger itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, voice, speak]);
 }

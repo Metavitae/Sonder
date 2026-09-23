@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +19,7 @@ import { useIdleSleep } from "../lib/useIdleSleep";
 import { pickDreamLine, pickWakeLine } from "../lib/sleepBit";
 import { notifyDreaming } from "../lib/dreamNotify";
 import { useHeadphonesConnected } from "../lib/audioRoute";
-import { usePreferredVoice, USER_VOICES } from "../lib/voicePreference";
+import { useSonderVoice } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
 import { useSpeak } from "../lib/speak";
 import { useCharacterTraits } from "../lib/characterTraits";
@@ -51,7 +51,15 @@ const HEADPHONES_OVERLAY_OPACITY = 0.12;
 // No camera here — that's index.tsx's separate concern (the needs-boundary
 // face-tracking PoC). This screen never requests camera permission.
 export default function ChatScreen() {
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send } = useSonderChat();
+  // Voice is set by Sonder's gender at onboarding (voicePreference.ts); the
+  // only user control left here is on/off. Declared before useSonderChat so
+  // asking Sonder to talk (its [[voice:on]] tag) can switch it back on, and
+  // before the dream/wake effects below, which speak through the same
+  // pipeline as chat replies (Part 31).
+  const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
+  const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send } =
+    useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
   const { color, intensity } = moodToMist(mood);
@@ -63,12 +71,6 @@ export default function ChatScreen() {
   // on it when this is the first turn of the session.
   const presence = usePresence();
 
-  // Per "Sonder - Voice Two-Phase Plan (canonical 2026-08-17)" Phase 1 —
-  // the user's pick, persisted across sessions (voicePreference.ts), not a
-  // fixed persona. Declared here (rather than down by useSpeakReplies)
-  // because the dream/wake effects below also need it, per Part 31 — those
-  // lines speak through the same pipeline as chat replies, not just text.
-  const { voice, setVoice } = usePreferredVoice();
   const speak = useSpeak();
 
   // Item 6 — performed sleep/dreaming bit. `noteActivity` marks the moment
@@ -83,7 +85,7 @@ export default function ChatScreen() {
     if (isDreaming) {
       const line = pickDreamLine();
       setDreamLine(line);
-      speak(line, voice, { instant: true });
+      if (voiceEnabled) speak(line, voice, { instant: true });
       // Part 76 item 1 (Option 3) — the durable signal, survives the
       // screen being locked; the dim overlay + bubble below are a bonus
       // for whenever the screen does happen to be on, not the real path.
@@ -97,7 +99,7 @@ export default function ChatScreen() {
     if (!justWoke) return;
     const line = pickWakeLine();
     setWakeLine(line);
-    speak(line, voice, { instant: true });
+    if (voiceEnabled) speak(line, voice, { instant: true });
     // A real wake moment always has the screen on (it's triggered by real
     // interaction — noteActivity), so a haptic pulse here is a genuine,
     // reliable cue rather than depending on screen state like the overlay.
@@ -129,9 +131,9 @@ export default function ChatScreen() {
       : intensity;
 
   // useSpeakReplies watches `messages` and speaks each new Sonder reply
-  // aloud in whichever voice is currently selected (voice/speak declared
-  // above, shared with the dream/wake lines).
-  useSpeakReplies(messages, voice);
+  // aloud in Sonder's voice (voice/speak declared above, shared with the
+  // dream/wake lines) — unless the user has turned voice off.
+  useSpeakReplies(messages, voice, voiceEnabled);
 
   // Part 72 — each reply can flag a real trust/autonomy/initiative/industry
   // moment; applyTraitSignal only actually moves a stored weight once a
@@ -149,7 +151,7 @@ export default function ChatScreen() {
     const text = input;
     setInput("");
     noteActivity();
-    send(text, presence, headphonesConnected, traitWeights ?? undefined);
+    send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
     // Keep the cursor live in the field after sending, rather than making
     // the user tap back in every time — pressing the Send button (as
     // opposed to the keyboard's own submit key) blurs the input by default.
@@ -167,18 +169,19 @@ export default function ChatScreen() {
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.dreamOverlay, dreamOverlayStyle]}
       />
+      {
+        // Autumn/Troy pills removed per founder (2026-09-14 instructions,
+        // item 4) — which voice is fixed by onboarding; this only mutes it.
+      }
       <View style={[styles.voicePicker, { top: 12 + insets.top }]}>
-        {USER_VOICES.map((v) => (
-          <Pressable
-            key={v}
-            style={[styles.voicePill, v === voice && styles.voicePillActive]}
-            onPress={() => setVoice(v)}
-          >
-            <Text style={[styles.voicePillText, v === voice && styles.voicePillTextActive]}>
-              {v}
-            </Text>
-          </Pressable>
-        ))}
+        <Pressable
+          style={[styles.voicePill, voiceEnabled && styles.voicePillActive]}
+          onPress={() => setVoiceEnabled(!voiceEnabled)}
+        >
+          <Text style={[styles.voicePillText, voiceEnabled && styles.voicePillTextActive]}>
+            {voiceEnabled ? "Voice on" : "Voice off"}
+          </Text>
+        </Pressable>
       </View>
       {
         // Real bug (founder report, Part 24): `behavior: undefined` on
@@ -272,7 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   voicePillActive: { backgroundColor: "#7CFFB2" },
-  voicePillText: { color: "#F0E6FF", fontSize: 12, fontWeight: "600", textTransform: "capitalize" },
+  voicePillText: { color: "#F0E6FF", fontSize: 12, fontWeight: "600" },
   voicePillTextActive: { color: "#000" },
   error: { color: "#ff8a8a", padding: 8 },
   inputRow: {

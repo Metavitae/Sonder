@@ -9,7 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useFreefallDetector } from "../lib/motion";
 import { useSpeak } from "../lib/speak";
-import { usePreferredVoice } from "../lib/voicePreference";
+import { useSonderVoice } from "../lib/voicePreference";
 import { emitDreamWake } from "../lib/dreamWakeBus";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 2 —
@@ -35,7 +35,7 @@ export function FreefallStartle() {
   const flash = useSharedValue(0);
   const lastTriggerRef = useRef(0);
   const speak = useSpeak();
-  const { voice } = usePreferredVoice();
+  const { voice, voiceEnabled } = useSonderVoice();
 
   const trigger = useCallback(() => {
     const now = Date.now();
@@ -58,8 +58,8 @@ export function FreefallStartle() {
     );
 
     const line = FREEFALL_LINES[Math.floor(Math.random() * FREEFALL_LINES.length)];
-    speak(line, voice, { instant: true });
-  }, [flash, speak, voice]);
+    if (voiceEnabled) speak(line, voice, { instant: true });
+  }, [flash, speak, voice, voiceEnabled]);
 
   useFreefallDetector(trigger);
 

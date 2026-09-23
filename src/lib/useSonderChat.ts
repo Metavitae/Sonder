@@ -34,7 +34,7 @@ export type Mood = { warmth: Warmth; arousal: Arousal };
 
 const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
-type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal };
+type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal; voiceOn?: boolean };
 
 async function requestChat(
   text: string,
@@ -42,7 +42,8 @@ async function requestChat(
   sessionOpening: boolean,
   openingPresence?: Presence,
   headphonesConnected?: boolean,
-  traitWeights?: TraitWeights
+  traitWeights?: TraitWeights,
+  voiceEnabled = true
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -71,6 +72,12 @@ async function requestChat(
   if (headphonesConnected) {
     body.headphones = true;
   }
+  // Voice on/off toggle (2026-09-14 voice-regression instructions, item 3)
+  // — lets groq.ts's VOICE_CAPABILITY_NOTE tell the truth about whether
+  // Sonder is being heard. Only sent when off; the server defaults to on.
+  if (!voiceEnabled) {
+    body.voice = false;
+  }
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -80,7 +87,14 @@ async function requestChat(
   return (await res.json()) as ChatResponse;
 }
 
-export function useSonderChat() {
+// onVoiceOn: the user asked Sonder, in words, to talk (founder addition
+// 2026-09-23) — the server reports it via groq.ts's [[voice:on]] tag. Fired
+// before the reply is added to messages, so the voice is already on in the
+// same render useSpeakReplies sees that reply, and it gets spoken.
+export function useSonderChat(onVoiceOn?: () => void) {
+  // Ref, not a dep of send() below — send is deliberately stable ([] deps).
+  const onVoiceOnRef = useRef(onVoiceOn);
+  onVoiceOnRef.current = onVoiceOn;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isWaiting, setIsWaiting] = useState(false);
   const [coldStartLine, setColdStartLine] = useState<string | null>(null);
@@ -131,7 +145,8 @@ export function useSonderChat() {
     text: string,
     openingPresence?: Presence,
     headphonesConnected?: boolean,
-    traitWeights?: TraitWeights
+    traitWeights?: TraitWeights,
+    voiceEnabled?: boolean
   ) => {
     if (!text.trim()) return;
     setError(null);
@@ -188,7 +203,8 @@ export function useSonderChat() {
           sessionOpening,
           openingPresence,
           headphonesConnected,
-          traitWeights
+          traitWeights,
+          voiceEnabled
         );
       } catch (firstErr) {
         // Real bug found 2026-08-14 (founder's first live test, Part 24):
@@ -207,9 +223,11 @@ export function useSonderChat() {
           sessionOpening,
           openingPresence,
           headphonesConnected,
-          traitWeights
+          traitWeights,
+          voiceEnabled
         );
       }
+      if (data.voiceOn) onVoiceOnRef.current?.();
       setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
       if (data.mood) setMood(data.mood);
       setTraitSignal(data.traitSignal ?? null);
