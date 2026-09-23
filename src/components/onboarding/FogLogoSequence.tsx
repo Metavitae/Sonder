@@ -8,7 +8,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { createAudioPlayer } from "expo-audio";
 
+import { SONDER_WHISTLE_SOUND } from "../../assets/sound";
 import type { MistColor } from "../../lib/mistAtlas";
 import { SpriteMistPoC } from "../SpriteMistPoC";
 
@@ -45,6 +47,17 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
   const [stageIndex, setStageIndex] = useState(0);
   const [visibleLogo, setVisibleLogo] = useState<ImageSourcePropType | null>(null);
   const fogOpacity = useSharedValue(0);
+
+  // Complete Reference §1: Sonder "opens with a soft, wordless whistle, not
+  // a jingle or a question — presence before performance." The asset was
+  // bundled 2026-08-05 but never given a trigger; founder confirmed
+  // (2026-09-23) it belongs at the very beginning, i.e. here, starting with
+  // the first fog pulse. Plays once, on mount only — not per stage.
+  useEffect(() => {
+    const player = createAudioPlayer(SONDER_WHISTLE_SOUND);
+    player.play();
+    return () => player.remove();
+  }, []);
 
   useEffect(() => {
     const stage = STAGES[stageIndex];
