@@ -45,3 +45,6 @@ example
 # local Expo module native build output
 modules/*/android/build/
 modules/*/android/.cxx/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
