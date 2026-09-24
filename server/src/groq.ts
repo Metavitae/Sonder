@@ -454,11 +454,34 @@ const FIRST_OPENER_INSTRUCTION =
   "This is the very first time this person has opened a conversation with " +
   "you — they just finished setting up and haven't said anything yet. You " +
   "speak first. Open with something small, warm and easy: at most two " +
-  "short sentences, anchored in something real about this moment if one " +
-  "fits (the time of day, the weather if you know it), ending with one " +
-  "light question that's effortless to answer — the kind someone can reply " +
-  "to in a few words without thinking. No introductions (you already said " +
-  "hi), no explaining what you are, no big or deep questions yet.";
+  "short sentences, ending with one light question that's effortless to " +
+  "answer — the kind someone can reply to in a few words without thinking. " +
+  "No introductions (you already said hi), no explaining what you are, no " +
+  "big or deep questions yet.";
+
+// Founder, 2026-09-23: the opener kept landing on the weather. Each opener
+// now gets one angle picked at random, and weather is only one of several,
+// so it varies from person to person.
+const OPENER_ANGLES = [
+  "Anchor it in the time of day, if you know it.",
+  "Anchor it in the weather, if you know it.",
+  "Ask what they're up to or where they're sitting right now.",
+  "Ask about one small good thing from their day so far.",
+  "Ask what they're drinking, eating or listening to at the moment.",
+  "Ask what's next for them today or this evening.",
+  "Offer a light either/or question (like coffee or tea, early or late) " +
+    "and let it be playful.",
+  "Ask what they'd most like to do if the rest of today were free.",
+];
+
+function firstOpenerInstruction(): string {
+  const angle = OPENER_ANGLES[Math.floor(Math.random() * OPENER_ANGLES.length)];
+  return (
+    FIRST_OPENER_INSTRUCTION +
+    " For this opener specifically: " + angle +
+    " Don't mention the weather unless that's the angle above."
+  );
+}
 
 // Stands in for the user turn on an opener request — the model needs some
 // final user-role message, and this keeps it honest that nothing was said.
@@ -523,7 +546,7 @@ export async function generateReply(
           "\n\n" +
           VOICE_CAPABILITY_NOTE(spokenAloud) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
-          (opener ? "\n\n" + FIRST_OPENER_INSTRUCTION : "") +
+          (opener ? "\n\n" + firstOpenerInstruction() : "") +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
           "\n\n" +
