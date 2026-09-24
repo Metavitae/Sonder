@@ -8,12 +8,14 @@
 // language, checked before any network call — see useSonderChat.ts's
 // send(), where this runs before requestChat.
 //
-// Deliberately narrower than the full 5-tier layered system §7 describes
-// (explicit statements + indirect/tone-based language + pattern shifts
-// over time + facial/wearable signal fusion) — that fuller system is real
-// design work the doc itself hasn't finished (its own resource table has
-// an unresolved conflict, no clinical/legal review yet). This catches
-// explicit statements only. Per §7's governing principle — "a false
+// Deliberately narrower than the full 5-tier layered system in "Sonder -
+// Crisis Protocol Function 13 (canonical 2026-09-23)" (explicit statements
+// + indirect/tone-based language + pattern shifts over time + breathing +
+// an orientation check + spiral detection across recent messages) — that
+// fuller system is still design work (unresolved resource-table entry,
+// spiral detection pending a proposal). Body sensors/wearables and
+// cultural-variance reading were dropped from the design on 2026-09-23 —
+// don't add them back. This catches explicit statements only. Per §7's governing principle — "a false
 // check-in costs almost nothing; a missed real one costs everything" —
 // the phrase list below errs toward over-triggering, not under.
 //
