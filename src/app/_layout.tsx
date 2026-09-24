@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
 import { loadOnboardingState } from "../lib/onboardingStorage";
 import { OnboardingGateContext } from "../lib/onboardingGate";
+import { useServerWarmup } from "../lib/serverWarmup";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,6 +43,9 @@ export default function RootLayout() {
   // finished onboarding, navigate to /chat" from "app opened already
   // onboarded, stay on index.tsx as usual."
   const justCompletedRef = useRef(false);
+
+  // Wake sonder-server as soon as the app opens — see serverWarmup.ts.
+  useServerWarmup();
 
   useEffect(() => {
     loadOnboardingState().then((s) => {
