@@ -30,7 +30,11 @@ type VoiceSettings = { voice: UserVoice; voiceEnabled: boolean };
 // One app-wide store, not per-component state: chat.tsx owns the toggle,
 // but FreefallStartle (mounted outside the chat screen) speaks too and has
 // to see the same on/off value the moment it changes.
-let settings: VoiceSettings = { voice: DEFAULT_VOICE, voiceEnabled: true };
+// Voice starts OFF (founder, 2026-09-23: it began speaking without being
+// asked). It only turns on via the chat screen's Voice button or by asking
+// Sonder to talk (the [[voice:on]] tag) — both go through setVoiceEnabled,
+// which persists the choice.
+let settings: VoiceSettings = { voice: DEFAULT_VOICE, voiceEnabled: false };
 const listeners = new Set<() => void>();
 let loaded = false;
 
@@ -49,7 +53,7 @@ function subscribe(listener: () => void) {
     loaded = true;
     AsyncStorage.getItem(ENABLED_KEY)
       .then((stored) => {
-        if (stored === "false") update({ voiceEnabled: false });
+        if (stored === "true") update({ voiceEnabled: true });
       })
       .catch(() => {});
   }

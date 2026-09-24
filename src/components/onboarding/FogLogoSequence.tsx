@@ -24,7 +24,7 @@ const FOG_IN_MS = 900;
 const FOG_HOLD_MS = 500;
 const FOG_OUT_MS = 900;
 const LOGO_HOLD_MS = 1100;
-const WHISTLE_VOLUME = 0.35;
+const WHISTLE_VOLUME = 0.175;
 
 type StageConfig = { fogColor: MistColor; logo: ImageSourcePropType | null };
 
@@ -55,7 +55,8 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
   // (2026-09-23) it belongs at the very beginning, i.e. here, starting with
   // the first fog pulse. Plays once, on mount only — not per stage.
   // Founder, first live listen (2026-09-23): full volume was too loud for
-  // "soft" — WHISTLE_VOLUME scales it down independent of device volume.
+  // "soft" (0.35), then half that again on the second listen — WHISTLE_VOLUME
+  // scales it down independent of device volume.
   useEffect(() => {
     const player = createAudioPlayer(SONDER_WHISTLE_SOUND);
     player.volume = WHISTLE_VOLUME;

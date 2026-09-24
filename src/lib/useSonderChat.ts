@@ -44,7 +44,7 @@ async function requestChat(
   openingPresence?: Presence,
   headphonesConnected?: boolean,
   traitWeights?: TraitWeights,
-  voiceEnabled = true,
+  voiceEnabled = false,
   opener = false
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
@@ -146,7 +146,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
       // dropped rather than landing after their message.
       if (stored.length === 0) {
         setIsWaiting(true);
-        requestChat("", [], false, undefined, undefined, undefined, true, true)
+        requestChat("", [], false, undefined, undefined, undefined, false, true)
           .then((data) => {
             if (cancelled || !data.reply) return;
             setMessages((prev) => (prev.length === 0 ? [{ role: "sonder", text: data.reply }] : prev));
