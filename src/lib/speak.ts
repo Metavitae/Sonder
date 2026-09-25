@@ -3,6 +3,7 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-aud
 import * as Speech from "expo-speech";
 import type { UserVoice } from "./voicePreference";
 import { hasLocalVoice, speakLocally, stopLocalVoice } from "./localVoice";
+import { looksSpanish } from "./replyLanguage";
 
 // Duplicated from useSonderChat.ts for the same reason its own Mood/Warmth/
 // Arousal types are duplicated — client and server are separate packages,
@@ -160,6 +161,16 @@ export function useSpeak() {
     // server for the voice). Fast enough for reflex lines too, so `instant`
     // doesn't skip it. Orpheus and the built-in voice below only run when
     // the on-device voice isn't downloaded yet or fails.
+    // Spanish replies (Sonder mirrors the user's language) go to the phone's
+    // own Mexican-Spanish voice: free, on-device, no server — Kristin/Joe
+    // and Orpheus only speak English. Founder rejected the Piper Mexican
+    // voices by ear (2026-09-25: far too slow).
+    if (looksSpanish(text)) {
+      vlog("spanish line, built-in es-MX voice");
+      Speech.speak(text, { language: "es-MX" });
+      return;
+    }
+
     if (hasLocalVoice(voice)) {
       try {
         vlog("speaking on-device, generation", myGeneration);
