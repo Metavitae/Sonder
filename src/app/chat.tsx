@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -67,6 +69,41 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // Founder request (2026-09-25): a way back to the newest message after
+  // scrolling up to reread. The chat only follows new messages while the
+  // reader is already at the bottom; otherwise a "↓" button appears (mint
+  // when something new arrived below) and jumps back down.
+  const atBottomRef = useRef(true);
+  // Only a finger scroll can take the reader "away" from the bottom — the
+  // chat's own animated scrollToEnd passes through not-at-bottom positions
+  // too, and must not flash the button or stop following new messages.
+  const userScrolledRef = useRef(false);
+  const [showJump, setShowJump] = useState(false);
+  const [unseenBelow, setUnseenBelow] = useState(false);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const fromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    const atBottom = fromBottom < 80;
+    if (!atBottom && !userScrolledRef.current) return;
+    if (atBottom) userScrolledRef.current = false;
+    atBottomRef.current = atBottom;
+    setShowJump(!atBottom);
+    if (atBottom) setUnseenBelow(false);
+  }, []);
+  const handleContentSizeChange = useCallback(() => {
+    if (atBottomRef.current) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    } else {
+      setUnseenBelow(true);
+    }
+  }, []);
+  const jumpToLatest = useCallback(() => {
+    userScrolledRef.current = false;
+    atBottomRef.current = true;
+    setShowJump(false);
+    setUnseenBelow(false);
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, []);
   // Per Part 22/25 item 9 — read continuously, but only the reading at the
   // moment the opening send fires actually matters; useSonderChat only acts
   // on it when this is the first turn of the session.
@@ -161,6 +198,8 @@ export default function ChatScreen() {
     setInput("");
     noteActivity();
     send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
+    // Sending always brings the conversation back to the bottom.
+    jumpToLatest();
     // Keep the cursor live in the field after sending, rather than making
     // the user tap back in every time — pressing the Send button (as
     // opposed to the keyboard's own submit key) blurs the input by default.
@@ -205,11 +244,17 @@ export default function ChatScreen() {
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        <View style={styles.flex}>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          onScroll={handleScroll}
+          onScrollBeginDrag={() => {
+            userScrolledRef.current = true;
+          }}
+          scrollEventThrottle={100}
+          onContentSizeChange={handleContentSizeChange}
         >
           {messages.map((m, i) => (
             <View
@@ -236,6 +281,18 @@ export default function ChatScreen() {
           )}
           {error && <Text style={styles.error}>{error}</Text>}
         </ScrollView>
+        {showJump && (
+          <Pressable
+            style={[styles.jumpButton, unseenBelow && styles.jumpButtonNew]}
+            onPress={jumpToLatest}
+            accessibilityRole="button"
+            accessibilityLabel="Jump to the latest message"
+            hitSlop={8}
+          >
+            <Text style={[styles.jumpText, unseenBelow && styles.jumpTextNew]}>↓</Text>
+          </Pressable>
+        )}
+        </View>
         <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
           <TextInput
             ref={inputRef}
@@ -287,6 +344,20 @@ const styles = StyleSheet.create({
   voicePillText: { color: "#F0E6FF", fontSize: 12, fontWeight: "600" },
   voicePillTextActive: { color: "#000" },
   error: { color: "#ff8a8a", padding: 8 },
+  jumpButton: {
+    position: "absolute",
+    right: 16,
+    bottom: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  jumpButtonNew: { backgroundColor: "#7CFFB2" },
+  jumpText: { color: "#F0E6FF", fontSize: 22, fontWeight: "600", lineHeight: 24 },
+  jumpTextNew: { color: "#000" },
   inputRow: {
     flexDirection: "row",
     padding: 12,
