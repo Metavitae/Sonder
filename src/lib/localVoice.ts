@@ -25,7 +25,14 @@ const LOCAL_VOICES: Partial<Record<UserVoice, LocalVoice>> = {
     url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-kristin-medium.tar.bz2",
     modelFile: "en_US-kristin-medium.onnx",
   },
-  // No male on-device voice picked yet — male Sonder keeps Orpheus "troy".
+  // Founder's pick by ear for male Sonder, 2026-09-25 ("b" → Joe; CC0
+  // licence). Other commercial-safe male options tested: norman, john,
+  // bryce (public domain).
+  troy: {
+    id: "piper-joe-medium",
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_US-joe-medium.tar.bz2",
+    modelFile: "en_US-joe-medium.onnx",
+  },
 };
 
 let preparing: Promise<void> | null = null;
