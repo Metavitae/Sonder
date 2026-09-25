@@ -22,6 +22,7 @@ import { useHeadphonesConnected } from "../lib/audioRoute";
 import { useSonderVoice } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
 import { useSpeak } from "../lib/speak";
+import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 
@@ -134,6 +135,14 @@ export default function ChatScreen() {
   // aloud in Sonder's voice (voice/speak declared above, shared with the
   // dream/wake lines) — unless the user has turned voice off.
   useSpeakReplies(messages, voice, voiceEnabled);
+
+  // On-device voice (founder decision 2026-09-25): fetched once (~65 MB)
+  // and warmed up in the background, only once voice is actually on, so
+  // nobody downloads it for a feature they never use. Until it's ready,
+  // replies keep using Orpheus / the built-in voice.
+  useEffect(() => {
+    if (voiceEnabled) prepareLocalVoice(voice);
+  }, [voice, voiceEnabled]);
 
   // Part 72 — each reply can flag a real trust/autonomy/initiative/industry
   // moment; applyTraitSignal only actually moves a stored weight once a

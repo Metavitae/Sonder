@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import * as Speech from "expo-speech";
 import type { UserVoice } from "./voicePreference";
+import { hasLocalVoice, speakLocally, stopLocalVoice } from "./localVoice";
 
 // Duplicated from useSonderChat.ts for the same reason its own Mood/Warmth/
 // Arousal types are duplicated — client and server are separate packages,
@@ -153,6 +154,23 @@ export function useSpeak() {
     activePlayerRef.current?.remove();
     activePlayerRef.current = null;
     Speech.stop();
+    stopLocalVoice();
+
+    // On-device voice first (founder decision 2026-09-25: no paid/quota
+    // server for the voice). Fast enough for reflex lines too, so `instant`
+    // doesn't skip it. Orpheus and the built-in voice below only run when
+    // the on-device voice isn't downloaded yet or fails.
+    if (hasLocalVoice(voice)) {
+      try {
+        vlog("speaking on-device, generation", myGeneration);
+        const finished = await speakLocally(text, voice);
+        vlog("on-device result", finished, "generation", myGeneration);
+        return;
+      } catch (e) {
+        vlog("on-device voice failed", String(e));
+        if (myGeneration !== generationRef.current) return;
+      }
+    }
 
     // Reflex lines (freefall gag, dream/wake) need to land the instant they
     // fire, same as a person's own startle reflex — Orpheus is a real
@@ -188,6 +206,7 @@ export function useSpeak() {
       vlog("useSpeak unmount cleanup, removing", activePlayerRef.current?.id);
       activePlayerRef.current?.remove();
       Speech.stop();
+      stopLocalVoice();
     };
   }, []);
 
