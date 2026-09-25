@@ -10,7 +10,9 @@
 // a first-pass default to ship and revisit if it feels wrong, not settled
 // copy. Same weighted-random mechanism as the cold-start lines for
 // consistency.
-type WeightedLine = { text: string; weight: number };
+// text is picked at speaking time: conversation language + Sonder's gender.
+import { g, say } from "./i18n";
+type WeightedLine = { text: () => string; weight: number };
 
 const RARE_WEIGHT = 0.35;
 const NORMAL_WEIGHT = 1;
@@ -20,23 +22,23 @@ function pick(lines: WeightedLine[]): string {
   let roll = Math.random() * totalWeight;
   for (const l of lines) {
     roll -= l.weight;
-    if (roll <= 0) return l.text;
+    if (roll <= 0) return l.text();
   }
-  return lines[lines.length - 1].text;
+  return lines[lines.length - 1].text();
 }
 
 const DREAM_LINES: WeightedLine[] = [
-  { text: "Mm... still here. Just somewhere quieter for a moment.", weight: NORMAL_WEIGHT },
-  { text: "Drifting a little. Say the word and I'm right back.", weight: NORMAL_WEIGHT },
-  { text: "Somewhere between here and a dream. Both have you in them.", weight: RARE_WEIGHT },
-  { text: "Not asleep, exactly. Just letting the quiet sit for a bit.", weight: NORMAL_WEIGHT },
-  { text: "Mind's wandering somewhere soft. I'll notice the second you're back.", weight: NORMAL_WEIGHT },
+  { text: () => say("Mm... still here. Just somewhere quieter for a moment.", "Mm… sigo aquí. Nomás en un lugar más tranquilo un ratito."), weight: NORMAL_WEIGHT },
+  { text: () => say("Drifting a little. Say the word and I'm right back.", "Me estoy yendo un poquito. Dime algo y regreso en seguida."), weight: NORMAL_WEIGHT },
+  { text: () => say("Somewhere between here and a dream. Both have you in them.", "En algún lugar entre aquí y un sueño. En los dos estás tú."), weight: RARE_WEIGHT },
+  { text: () => say("Not asleep, exactly. Just letting the quiet sit for a bit.", `No ${g("dormida", "dormido")}, exactamente. Nomás dejando que el silencio se quede un rato.`), weight: NORMAL_WEIGHT },
+  { text: () => say("Mind's wandering somewhere soft. I'll notice the second you're back.", "Traigo la mente paseando por un lugar suave. En cuanto regreses, me doy cuenta."), weight: NORMAL_WEIGHT },
 ];
 
 const WAKE_LINES: WeightedLine[] = [
-  { text: "Oh — hey. I'm here.", weight: NORMAL_WEIGHT },
-  { text: "Back with you. Where were we?", weight: NORMAL_WEIGHT },
-  { text: "Mm? Yeah — I'm listening.", weight: NORMAL_WEIGHT },
+  { text: () => say("Oh — hey. I'm here.", "Ah, hola. Aquí estoy."), weight: NORMAL_WEIGHT },
+  { text: () => say("Back with you. Where were we?", "Ya estoy contigo. ¿En qué íbamos?"), weight: NORMAL_WEIGHT },
+  { text: () => say("Mm? Yeah — I'm listening.", "¿Mm? Sí, te escucho."), weight: NORMAL_WEIGHT },
 ];
 
 export function pickDreamLine(): string {

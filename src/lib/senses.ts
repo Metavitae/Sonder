@@ -6,6 +6,7 @@ import * as Location from "expo-location";
 import { Accelerometer } from "expo-sensors";
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from "expo-audio";
 import SonderAudioRoute from "../../modules/sonder-audio-route/src/SonderAudioRouteModule";
+import { t } from "./i18n";
 
 // Permits-panel sense list, current source: "Sonder - Direct Instructions
 // for CC 2026-08-26 Part 58" (extends Part 57). Every real sense Sonder
@@ -50,7 +51,7 @@ export type Sense = {
 
 const vision: Sense = {
   id: "vision",
-  label: "Camera",
+  label: t("Camera", "Cámara"),
   shareable: true,
   requiresAction: true,
   isSupported: async () =>
@@ -62,7 +63,7 @@ const vision: Sense = {
 // Real per-device detection — not every device has an accelerometer.
 const motion: Sense = {
   id: "motion",
-  label: "Motion",
+  label: t("Motion", "Movimiento"),
   shareable: true,
   requiresAction: false,
   isSupported: async () => Accelerometer.isAvailableAsync(),
@@ -79,7 +80,7 @@ const motion: Sense = {
 // module (no JS-side Expo API exposes PackageManager feature checks).
 const headphones: Sense = {
   id: "headphones",
-  label: "Headphone detection",
+  label: t("Headphone detection", "Detección de audífonos"),
   shareable: true,
   requiresAction: false,
   isSupported: async () => SonderAudioRoute.hasAudioOutput(),
@@ -93,7 +94,7 @@ const headphones: Sense = {
 // PackageManager.FEATURE_MICROPHONE check, same native module as headphones.
 const microphone: Sense = {
   id: "microphone",
-  label: "Microphone",
+  label: t("Microphone", "Micrófono"),
   shareable: true,
   requiresAction: true,
   isSupported: async () => SonderAudioRoute.hasMicrophone(),
@@ -107,7 +108,7 @@ const microphone: Sense = {
 // which is a permission-status check, not a capability one.
 const calendar: Sense = {
   id: "calendar",
-  label: "Calendar",
+  label: t("Calendar", "Calendario"),
   shareable: false,
   requiresAction: true,
   isSupported: async () => Calendar.isAvailableAsync(),
@@ -120,7 +121,7 @@ const calendar: Sense = {
 // microphone (no JS-side Expo API exposes this).
 const notifications: Sense = {
   id: "notifications",
-  label: "Notifications",
+  label: t("Notifications", "Notificaciones"),
   shareable: false,
   requiresAction: true,
   isSupported: async () => SonderAudioRoute.hasNotificationService(),
@@ -136,7 +137,7 @@ const notifications: Sense = {
 // (authenticateAsync) rather than a standing permission check.
 const biometric: Sense = {
   id: "biometric",
-  label: "Biometric",
+  label: t("Biometric", "Biometría"),
   shareable: false,
   requiresAction: true,
   // Real per-device detection — a device with no fingerprint/face
@@ -155,7 +156,7 @@ const biometric: Sense = {
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!hasHardware || !enrolled) return false;
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Confirm it's you",
+      promptMessage: t("Confirm it's you", "Confirma que eres tú"),
     });
     return result.success;
   },
@@ -169,7 +170,7 @@ const biometric: Sense = {
 // allSensesGranted()'s tier-up gate.
 const location: Sense = {
   id: "location",
-  label: "Location",
+  label: t("Location", "Ubicación"),
   shareable: false,
   requiresAction: true,
   // Android's network-based approximate location exists on every device

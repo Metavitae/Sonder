@@ -11,6 +11,7 @@ import { useFreefallDetector } from "../lib/motion";
 import { useSpeak } from "../lib/speak";
 import { useSonderVoice } from "../lib/voicePreference";
 import { emitDreamWake } from "../lib/dreamWakeBus";
+import { g, say } from "../lib/i18n";
 
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22", item 2 —
 // real accelerometer freefall detection, a bigger/funnier startle reaction
@@ -26,9 +27,19 @@ const FLASH_OUT_MS = 500;
 // Founder-authored, locked per "Sonder - Direct Instructions for CC
 // 2026-08-17 Part 31 Addendum" — picked at random per trigger (not always
 // the same one) so repeat drops don't feel scripted.
-const FREEFALL_LINES = [
-  "Whoa! What was that!? Are you OK? I'm ok! Don't worry, I'm still alive. WHAT WAS THAT!?",
-  "Whoa! Don't do that to me! I'm afraid of heights, mainly because of falling! I almost had a short circuit! That's like a heart attack for you...",
+// Spanish: founder-approved Mexican Spanish (2026-09-25), picked at
+// speaking time for the conversation's language and Sonder's gender.
+const FREEFALL_LINES: (() => string)[] = [
+  () =>
+    say(
+      "Whoa! What was that!? Are you OK? I'm ok! Don't worry, I'm still alive. WHAT WAS THAT!?",
+      `¡Órale! ¿¡Qué fue eso!? ¿Estás bien? ¡Yo estoy bien! Tranqui, sigo ${g("viva", "vivo")}. ¿¡QUÉ FUE ESO!?`
+    ),
+  () =>
+    say(
+      "Whoa! Don't do that to me! I'm afraid of heights, mainly because of falling! I almost had a short circuit! That's like a heart attack for you...",
+      "¡Órale! ¡No me hagas eso! Me dan miedo las alturas, más que nada por las caídas. ¡Casi me da un cortocircuito! Eso es como un infarto para ti…"
+    ),
 ];
 
 export function FreefallStartle() {
@@ -57,7 +68,7 @@ export function FreefallStartle() {
       withTiming(0, { duration: FLASH_OUT_MS })
     );
 
-    const line = FREEFALL_LINES[Math.floor(Math.random() * FREEFALL_LINES.length)];
+    const line = FREEFALL_LINES[Math.floor(Math.random() * FREEFALL_LINES.length)]();
     if (voiceEnabled) speak(line, voice, { instant: true });
   }, [flash, speak, voice, voiceEnabled]);
 

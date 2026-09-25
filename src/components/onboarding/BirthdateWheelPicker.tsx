@@ -8,16 +8,22 @@ import {
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { uiSpanish } from "../../lib/i18n";
 
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 5; // odd, center row is the selected value
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 const PADDING = ITEM_HEIGHT * Math.floor(VISIBLE_ITEMS / 2);
 
-const MONTHS = [
+const MONTHS_EN = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const MONTHS_ES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+const MONTHS = uiSpanish ? MONTHS_ES : MONTHS_EN;
 const MIN_YEAR = 1920;
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_AGE = 18;

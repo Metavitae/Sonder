@@ -1,6 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { FAQ_QA, FAQ_TITLE } from "../../lib/permissionCopy";
+import { t } from "../../lib/i18n";
 
 // Neutral-voice modal — UI/settings copy, deliberately never rendered as a
 // Sonder bubble (per the plan: the FAQ is kept entirely out of Sonder's own
@@ -26,7 +27,7 @@ export function PermissionFaqSheet({
             ))}
           </ScrollView>
           <Pressable style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>{t("Close", "Cerrar")}</Text>
           </Pressable>
         </View>
       </View>

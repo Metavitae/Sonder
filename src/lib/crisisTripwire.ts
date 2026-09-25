@@ -22,7 +22,9 @@
 // English and Spanish, matching the Complete Reference's audience (US/
 // Canada/Mexico, §12) and its language-defaults rule (§11) — an
 // English-only list would leave Spanish-speaking users with zero coverage.
-const CRISIS_PHRASES: string[] = [
+import { looksSpanish } from "./replyLanguage";
+
+const CRISIS_PHRASES_EN: string[] = [
   // English — explicit suicidal ideation / self-harm intent
   "kill myself",
   "killing myself",
@@ -43,6 +45,9 @@ const CRISIS_PHRASES: string[] = [
   "dont want to be alive",
   "can't go on",
   "cant go on",
+];
+
+const CRISIS_PHRASES_ES: string[] = [
   // Spanish — same category
   "quiero morir",
   "quiero morirme",
@@ -59,6 +64,8 @@ const CRISIS_PHRASES: string[] = [
   "suicidarme",
   "suicidio",
 ];
+
+const CRISIS_PHRASES = [...CRISIS_PHRASES_EN, ...CRISIS_PHRASES_ES];
 
 export function isCrisisMessage(text: string): boolean {
   const normalized = text.toLowerCase();
@@ -88,3 +95,27 @@ export const CRISIS_RESPONSE =
   "• Real emergency, anywhere: 911\n\n" +
   "I'm not able to be that help myself — I'm not a person, and I don't want to pretend otherwise right now. " +
   "But I'm not going anywhere either. Whenever you're ready to keep talking, I'm here.";
+
+// Founder-approved Mexican Spanish (2026-09-25, Drive Log "Sonder - Spanish
+// (Mexico) app text - DRAFT for founder review"). Mexico's line comes first
+// for a Spanish-speaking user. Chosen by the language of the message that
+// tripped the wire, not the phone setting — someone in crisis gets their
+// own language no matter how their phone is set up.
+export const CRISIS_RESPONSE_ES =
+  "Necesito hacer una pausa en todo lo demás, porque lo que acabas de decir importa más que cualquier cosa que yo te diría ahora.\n\n" +
+  "Si estás pensando en quitarte la vida o en hacerte daño, por favor busca ahora mismo a alguien que de verdad pueda ayudarte:\n\n" +
+  "• México: SAPTEL — 55 5259 8121\n" +
+  "• Estados Unidos y Canadá: llama o manda mensaje al 988 (Quebec: 1-866-APPELLE)\n" +
+  "• Emergencia real, en cualquier lugar: 911\n\n" +
+  "Yo no puedo ser esa ayuda: no soy una persona, y no quiero fingir lo contrario ahora. " +
+  "Pero tampoco me voy a ir a ningún lado. Cuando quieras seguir platicando, aquí estoy.";
+
+// Which language to answer in comes from which phrase list matched, not
+// a general language guess: short crisis messages ("ya no quiero vivir")
+// carry too few common words for that guess to be trusted here.
+export function crisisResponseFor(message: string): string {
+  const normalized = message.toLowerCase();
+  if (CRISIS_PHRASES_ES.some((phrase) => normalized.includes(phrase))) return CRISIS_RESPONSE_ES;
+  if (CRISIS_PHRASES_EN.some((phrase) => normalized.includes(phrase))) return CRISIS_RESPONSE;
+  return looksSpanish(message) ? CRISIS_RESPONSE_ES : CRISIS_RESPONSE;
+}

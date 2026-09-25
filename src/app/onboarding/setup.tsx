@@ -8,6 +8,7 @@ import { FogGemPicker, type FogGemOption } from "../../components/onboarding/Fog
 import { FogLogoSequence } from "../../components/onboarding/FogLogoSequence";
 import type { MistColor } from "../../lib/mistAtlas";
 import { useOnboarding } from "../../lib/onboardingContext";
+import { t } from "../../lib/i18n";
 
 // Arbitrary starting point for the wheel picker's initial position — old
 // enough that it clears the 18+ gate by default, so a user who never
@@ -33,13 +34,13 @@ function isValidEmail(email: string): boolean {
 // needed) purely as the visual fill for each option's fog swatch; the
 // color itself carries no separate meaning here.
 const USER_GENDER_OPTIONS: FogGemOption[] = [
-  { color: "blue", label: "Male" },
-  { color: "magenta", label: "Female" },
-  { color: "violet", label: "Not specified" },
+  { color: "blue", label: t("Male", "Masculino") },
+  { color: "magenta", label: t("Female", "Femenino") },
+  { color: "violet", label: t("Not specified", "Sin especificar") },
 ];
 const SONDER_GENDER_OPTIONS: FogGemOption[] = [
-  { color: "blue", label: "Male" },
-  { color: "magenta", label: "Female" },
+  { color: "blue", label: t("Male", "Masculino") },
+  { color: "magenta", label: t("Female", "Femenino") },
 ];
 
 // Registration (Part 52's name for this screen; still Stage 1 underneath) —
@@ -110,7 +111,7 @@ export default function SetupScreen() {
     // (title margins, inter-row gaps) to fit — not to reintroduce scrolling.
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
       <View style={styles.content}>
-        <Text style={styles.title}>What's your email?</Text>
+        <Text style={styles.title}>{t("What's your email?", "¿Cuál es tu correo?")}</Text>
         <TextInput
           style={styles.emailInput}
           value={state.email ?? ""}
@@ -123,14 +124,14 @@ export default function SetupScreen() {
           textContentType="emailAddress"
         />
         {state.email !== null && state.email.length > 0 && !emailValid && (
-          <Text style={styles.gateText}>That doesn't look like a valid email yet.</Text>
+          <Text style={styles.gateText}>{t("That doesn't look like a valid email yet.", "Ese correo todavía no parece válido.")}</Text>
         )}
 
-        <Text style={styles.title}>When were you born?</Text>
+        <Text style={styles.title}>{t("When were you born?", "¿Cuándo naciste?")}</Text>
         <BirthdateWheelPicker value={birthdateValue} onChange={handleBirthdateChange} />
-        {!isAdult && <Text style={styles.gateText}>Sonder is for adults 18 and up.</Text>}
+        {!isAdult && <Text style={styles.gateText}>{t("Sonder is for adults 18 and up.", "Sonder es para personas mayores de 18 años.")}</Text>}
 
-        <Text style={styles.title}>What's your gender?</Text>
+        <Text style={styles.title}>{t("What's your gender?", "¿Cuál es tu género?")}</Text>
         <FogGemPicker
           options={USER_GENDER_OPTIONS}
           selected={state.userColor}
@@ -138,7 +139,7 @@ export default function SetupScreen() {
           idPrefix="user"
         />
 
-        <Text style={styles.title}>What's Sonder's gender?</Text>
+        <Text style={styles.title}>{t("What's Sonder's gender?", "¿Cuál es el género de Sonder?")}</Text>
         <FogGemPicker
           options={SONDER_GENDER_OPTIONS}
           selected={state.sonderColor}
@@ -153,7 +154,7 @@ export default function SetupScreen() {
           disabled={!canContinue}
           style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
         >
-          <Text style={styles.continueText}>Continue</Text>
+          <Text style={styles.continueText}>{t("Continue", "Continuar")}</Text>
         </Pressable>
       </View>
     </View>

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useOnboarding } from "../../lib/onboardingContext";
 import type { SubscriptionTier } from "../../lib/onboardingStorage";
+import { t } from "../../lib/i18n";
 
 // Part 52 (2026-08-25): the real Free/Plus/Premium schema. Pricing is
 // explicitly not decided (Part 33 item 4, still pending) — shown as "TBD",
@@ -12,20 +13,20 @@ import type { SubscriptionTier } from "../../lib/onboardingStorage";
 const TIERS: { id: SubscriptionTier; name: string; description: string; price: string | null }[] = [
   {
     id: "free",
-    name: "Free",
-    description: "Full companionship — Sonder's core function, unrestricted at every tier.",
+    name: t("Free", "Gratis"),
+    description: t("Full companionship — Sonder's core function, unrestricted at every tier.", "Compañía completa: la función principal de Sonder, sin límites en ningún plan."),
     price: null,
   },
   {
     id: "plus",
     name: "Plus",
-    description: "Everything in Free, plus priority queue and faster responses during high load.",
+    description: t("Everything in Free, plus priority queue and faster responses during high load.", "Todo lo de Gratis, más prioridad en la fila y respuestas más rápidas cuando hay mucha demanda."),
     price: "TBD",
   },
   {
     id: "premium",
     name: "Premium",
-    description: "Everything in Plus, plus partner discounts and early access to new features.",
+    description: t("Everything in Plus, plus partner discounts and early access to new features.", "Todo lo de Plus, más descuentos con socios y acceso anticipado a funciones nuevas."),
     price: "TBD",
   },
 ];
@@ -53,7 +54,7 @@ export default function SubscriptionsScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 12 }]}>
       <View style={styles.content}>
-        <Text style={styles.heading}>Choose your plan</Text>
+        <Text style={styles.heading}>{t("Choose your plan", "Elige tu plan")}</Text>
         {TIERS.map((tier) => {
           const selected = state.subscriptionTier === tier.id;
           return (
@@ -64,7 +65,7 @@ export default function SubscriptionsScreen() {
             >
               <View style={styles.cardHeader}>
                 <Text style={styles.cardName}>{tier.name}</Text>
-                <Text style={styles.cardPrice}>{tier.price ?? "Free"}</Text>
+                <Text style={styles.cardPrice}>{tier.price ?? t("Free", "Gratis")}</Text>
               </View>
               <Text style={styles.cardDescription}>{tier.description}</Text>
             </Pressable>
@@ -78,7 +79,7 @@ export default function SubscriptionsScreen() {
           disabled={!canContinue}
           style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
         >
-          <Text style={styles.continueText}>Continue</Text>
+          <Text style={styles.continueText}>{t("Continue", "Continuar")}</Text>
         </Pressable>
       </View>
     </View>

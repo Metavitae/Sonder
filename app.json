@@ -90,7 +90,8 @@
       ],
       "expo-local-authentication",
       "expo-secure-store",
-      "./plugins/withPhoneAbisOnly.js"
+      "./plugins/withPhoneAbisOnly.js",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,

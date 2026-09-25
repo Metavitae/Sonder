@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PERMITS_EXPLANATION, DECLINE_RESPONSE } from "../../lib/permissionCopy";
 import { supportedSenses, type Sense } from "../../lib/senses";
+import { t } from "../../lib/i18n";
 
 type SenseResult = "granted" | "denied";
 
@@ -75,7 +76,9 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
                 disabled={result === "granted"}
               >
                 <Text style={styles.senseButtonText}>
-                  {result === "granted" ? `${sense.label} allowed` : `Allow ${sense.label}`}
+                  {result === "granted"
+                    ? t(`${sense.label} allowed`, `${sense.label}: permitido`)
+                    : t(`Allow ${sense.label}`, `Permitir ${sense.label.toLowerCase()}`)}
                 </Text>
               </Pressable>
               {result === "denied" && <Text style={styles.declineText}>{DECLINE_RESPONSE}</Text>}
@@ -85,7 +88,7 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
       </View>
 
       <Pressable style={styles.continueButton} onPress={handleContinue}>
-        <Text style={styles.continueButtonText}>Continue</Text>
+        <Text style={styles.continueButtonText}>{t("Continue", "Continuar")}</Text>
       </Pressable>
     </View>
   );

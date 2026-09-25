@@ -21,6 +21,7 @@ import {
   type FaceLandmarkDetectionResultBundle,
 } from "react-native-mediapipe";
 import { SpriteMistPoC, type MistColor } from "../components/SpriteMistPoC";
+import { t } from "../lib/i18n";
 
 // Mist mechanism: settled 2026-08-13. Per "Sonder - Direct Instructions for
 // CC (2026-08-11, Part 18)" + Addendum, the N=1/N=2 decoder-cliff finding
@@ -324,7 +325,7 @@ export default function FaceSignatureTest({
   if (!hasPermission) {
     return (
       <View style={styles.center}>
-        <Text style={styles.info}>Waiting for camera permission…</Text>
+        <Text style={styles.info}>{t("Waiting for camera permission…", "Esperando permiso de la cámara…")}</Text>
       </View>
     );
   }
@@ -332,7 +333,7 @@ export default function FaceSignatureTest({
   return (
     <View style={styles.container}>
       {device == null ? (
-        <Text style={styles.info}>Loading camera…</Text>
+        <Text style={styles.info}>{t("Loading camera…", "Cargando la cámara…")}</Text>
       ) : (
         <Camera
           style={StyleSheet.absoluteFillObject}
@@ -365,7 +366,7 @@ export default function FaceSignatureTest({
         href={"/chat" as never}
         style={[styles.chatLink, { bottom: insets.bottom + 24 }]}
       >
-        Talk to Sonder →
+        {t("Talk to Sonder →", "Hablar con Sonder →")}
       </Link>
       {
         // TEMPORARY dev-only entry point for onboarding-rebuild step 5's

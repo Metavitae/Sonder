@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
-import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
+import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import type { Presence } from "./motion";
 import type { TraitSignal, TraitWeights } from "./characterTraits";
+import { noteUserMessageLanguage, say } from "./i18n";
 
 // Set by the founder once the Render service exists — see server/README.md.
 // EXPO_PUBLIC_ vars are inlined at bundle time (Expo convention), so this
@@ -185,6 +186,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
     voiceEnabled?: boolean
   ) => {
     if (!text.trim()) return;
+    noteUserMessageLanguage(text);
     setError(null);
     const sessionOpening = sessionOpeningRef.current;
     sessionOpeningRef.current = false;
@@ -200,7 +202,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
       setMessages((prev) => [
         ...prev,
         { role: "user", text },
-        { role: "sonder", text: CRISIS_RESPONSE },
+        { role: "sonder", text: crisisResponseFor(text) },
       ]);
       return;
     }
@@ -268,7 +270,11 @@ export function useSonderChat(onVoiceOn?: () => void) {
       if (data.mood) setMood(data.mood);
       setTraitSignal(data.traitSignal ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Founder-approved (2026-09-25): a friendly line in the conversation's
+      // language instead of raw technical text ("server responded 500"),
+      // which stays in the log for debugging.
+      console.log("[chat] request failed", err instanceof Error ? err.message : String(err));
+      setError(say("Something went wrong on my end. Want to try again?", "Algo falló de mi lado. ¿Lo intentamos otra vez?"));
     } finally {
       if (revealTimerRef.current !== null) {
         clearTimeout(revealTimerRef.current);

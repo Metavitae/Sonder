@@ -27,6 +27,7 @@ import { useSpeak } from "../lib/speak";
 import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
+import { t } from "../lib/i18n";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -227,7 +228,7 @@ export default function ChatScreen() {
           onPress={() => setVoiceEnabled(!voiceEnabled)}
         >
           <Text style={[styles.voicePillText, voiceEnabled && styles.voicePillTextActive]}>
-            {voiceEnabled ? "Voice on" : "Voice off"}
+            {voiceEnabled ? t("Voice on", "Con voz") : t("Voice off", "Sin voz")}
           </Text>
         </Pressable>
       </View>
@@ -286,7 +287,7 @@ export default function ChatScreen() {
             style={[styles.jumpButton, unseenBelow && styles.jumpButtonNew]}
             onPress={jumpToLatest}
             accessibilityRole="button"
-            accessibilityLabel="Jump to the latest message"
+            accessibilityLabel={t("Jump to the latest message", "Ir al mensaje más reciente")}
             hitSlop={8}
           >
             <Text style={[styles.jumpText, unseenBelow && styles.jumpTextNew]}>↓</Text>
@@ -299,14 +300,14 @@ export default function ChatScreen() {
             style={styles.input}
             value={input}
             onChangeText={handleInputChange}
-            placeholder="Say something to Sonder..."
+            placeholder={t("Say something to Sonder...", "Dile algo a Sonder...")}
             placeholderTextColor="#c9c9c9"
             onSubmitEditing={handleSend}
             autoFocus
             blurOnSubmit={false}
           />
           <Pressable style={styles.sendButton} onPress={handleSend}>
-            <Text style={styles.sendText}>Send</Text>
+            <Text style={styles.sendText}>{t("Send", "Enviar")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

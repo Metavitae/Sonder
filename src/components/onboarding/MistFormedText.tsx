@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { t } from "../../lib/i18n";
 
 const FADE_IN_MS = 1400;
 const HOLD_MS = 1200;
@@ -42,7 +43,7 @@ export function MistFormedText({ onComplete }: { onComplete: () => void }) {
 
   return (
     <Animated.View style={[styles.wrap, style]} pointerEvents="none">
-      <Text style={styles.text}>Hi, I'm Sonder.</Text>
+      <Text style={styles.text}>{t("Hi, I'm Sonder.", "Hola, soy Sonder.")}</Text>
     </Animated.View>
   );
 }
