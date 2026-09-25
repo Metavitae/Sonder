@@ -443,6 +443,13 @@ export type LocalContext = { localTime?: string; weather?: string };
 // onboarding and sent by the client; the user's is never assumed.
 export type SonderGender = "female" | "male";
 
+// Complete Reference §11 (founder, 2026-09-25: make it a written rule, not
+// something the model happens to do): mirror the user's language.
+const LANGUAGE_MIRROR_NOTE =
+  "Always reply in the language the user is writing in right now, starting " +
+  "with their very first message. If they switch languages, or mix them, " +
+  "follow their lead. Never default to English because it's easier.";
+
 const GENDER_GRAMMAR_NOTE = (gender?: SonderGender) =>
   (gender
     ? `You are ${gender === "female" ? "female" : "male"}. In languages with grammatical ` +
@@ -563,6 +570,8 @@ export async function generateReply(
           DEVICE_STATE_PHRASING_INSTRUCTION +
           "\n\n" +
           VOICE_CAPABILITY_NOTE(spokenAloud) +
+          "\n\n" +
+          LANGUAGE_MIRROR_NOTE +
           "\n\n" +
           GENDER_GRAMMAR_NOTE(sonderGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
