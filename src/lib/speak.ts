@@ -40,6 +40,15 @@ function speakViaOrpheus(
     vlog("player created", player.id, "chars", text.length);
     onPlayerCreated(player);
     let settled = false;
+    // Only true when the timeout below gave up on this player. `settled`
+    // alone can't be used for the late-arrival guard: it's also true right
+    // after a *successful* start. Real bug found 2026-09-25 (POCO, logged
+    // trace): the status update just after "playing" saw settled=true and
+    // paused the reply ~30ms in — the founder heard nothing, and since
+    // Orpheus had "succeeded" the built-in fallback never spoke either. The
+    // same early return also skipped didJustFinish, so finished players
+    // were never removed and piled up.
+    let gaveUp = false;
 
     const finish = (success: boolean) => {
       if (settled) return;
@@ -59,6 +68,7 @@ function speakViaOrpheus(
       // speak right over whatever the native fallback (below) had already
       // said. pause() first, then remove().
       vlog("start timeout fired, giving up on", player.id);
+      gaveUp = true;
       player.pause();
       player.remove();
       finish(false);
@@ -67,6 +77,7 @@ function speakViaOrpheus(
     player.addListener("playbackStatusUpdate", (status) => {
       vlog("status", player.id, JSON.stringify({
         settled,
+        gaveUp,
         playing: status.playing,
         loaded: status.isLoaded,
         buffering: status.isBuffering,
@@ -76,7 +87,7 @@ function speakViaOrpheus(
         finished: status.didJustFinish,
         muted: status.mute,
       }));
-      if (settled) {
+      if (gaveUp) {
         // Arrived after we already gave up on this call (the slow-cold-
         // start case above) — don't let it start playing over whatever's
         // already speaking instead.
