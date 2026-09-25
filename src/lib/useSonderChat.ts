@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
+import { currentSonderGender } from "./voicePreference";
 import { isCrisisMessage, CRISIS_RESPONSE } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import type { Presence } from "./motion";
@@ -84,6 +85,7 @@ async function requestChat(
   // every turn (phone clock, no permission), weather only if coarse
   // location was granted — see localContext.ts for the privacy shape.
   body.localTime = localTimeLabel();
+  body.sonderGender = currentSonderGender();
   const weather = await currentWeatherSummary();
   if (weather) body.weather = weather;
   if (opener) body.opener = true;

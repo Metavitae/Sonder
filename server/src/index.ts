@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply, type ChatTurn, type Presence, type Trait, type TraitWeights } from "./groq.js";
+import { generateReply, type ChatTurn, type Presence, type SonderGender, type Trait, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -132,6 +132,12 @@ app.post("/chat", async (req, res) => {
   // Voice on/off toggle — only an explicit false means off, so builds that
   // predate the toggle (and never send it) keep the voice-on default.
   const spokenAloud = req.body?.voice !== false;
+  // Sonder's own gender (set at onboarding) for grammatical agreement in
+  // Spanish; anything else (older builds) means "not stated".
+  const sonderGender =
+    req.body?.sonderGender === "female" || req.body?.sonderGender === "male"
+      ? (req.body.sonderGender as SonderGender)
+      : undefined;
   const local = {
     localTime: parseShortText(req.body?.localTime),
     weather: parseShortText(req.body?.weather),
@@ -153,7 +159,7 @@ app.post("/chat", async (req, res) => {
       openingPresence,
       headphonesConnected,
       traitWeights,
-      { spokenAloud, local, opener }
+      { spokenAloud, local, opener, sonderGender }
     );
     res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {

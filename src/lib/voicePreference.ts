@@ -65,6 +65,12 @@ function setVoiceEnabled(next: boolean) {
   AsyncStorage.setItem(ENABLED_KEY, String(next)).catch(() => {});
 }
 
+// Sonder's gender as chosen at onboarding (it's what picks the voice), for
+// the server's Spanish gender-agreement note.
+export function currentSonderGender(): "female" | "male" {
+  return settings.voice === "troy" ? "male" : "female";
+}
+
 export function useSonderVoice() {
   const current = useSyncExternalStore(subscribe, () => settings);
   return { voice: current.voice, voiceEnabled: current.voiceEnabled, setVoiceEnabled };

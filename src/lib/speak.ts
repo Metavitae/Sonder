@@ -167,7 +167,8 @@ export function useSpeak() {
     // voices by ear (2026-09-25: far too slow).
     if (looksSpanish(text)) {
       vlog("spanish line, built-in es-MX voice");
-      Speech.speak(text, { language: "es-MX" });
+      // Founder: the Spanish voice was too fast — slowed to 0.85.
+      Speech.speak(text, { language: "es-MX", rate: 0.85 });
       return;
     }
 

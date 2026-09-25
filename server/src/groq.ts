@@ -438,6 +438,23 @@ function extractVoiceOn(raw: string): { reply: string; voiceOn: boolean } {
 // to a short summary — the server never sees coordinates.
 export type LocalContext = { localTime?: string; weather?: string };
 
+// Founder, 2026-09-25: in Spanish, gender changes the words ("estoy
+// contenta/contento", "nerviosa/nervioso"). Sonder's own gender is set at
+// onboarding and sent by the client; the user's is never assumed.
+export type SonderGender = "female" | "male";
+
+const GENDER_GRAMMAR_NOTE = (gender?: SonderGender) =>
+  (gender
+    ? `You are ${gender === "female" ? "female" : "male"}. In languages with grammatical ` +
+      `gender (such as Spanish), always use ${gender === "female" ? "feminine" : "masculine"} ` +
+      `forms when speaking about yourself (e.g. "${gender === "female" ? "estoy contenta" : "estoy contento"}"). `
+    : "") +
+  "Never assume the user's gender. In Spanish, until the user shows their own gender " +
+  "(e.g. they say \"estoy cansada\" or \"estoy cansado\"), phrase things about them " +
+  "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\"); once they " +
+  "have, match it. Write Spanish the way a Mexican speaker naturally would, never a " +
+  "literal translation from English.";
+
 const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
   "What's true around the user right now: " +
   [localTime && `it's ${localTime} where they are`, weather && `the weather there is ${weather}`]
@@ -507,7 +524,8 @@ export async function generateReply(
     spokenAloud = true,
     local = {},
     opener = false,
-  }: { spokenAloud?: boolean; local?: LocalContext; opener?: boolean } = {}
+    sonderGender,
+  }: { spokenAloud?: boolean; local?: LocalContext; opener?: boolean; sonderGender?: SonderGender } = {}
 ): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
@@ -545,6 +563,8 @@ export async function generateReply(
           DEVICE_STATE_PHRASING_INSTRUCTION +
           "\n\n" +
           VOICE_CAPABILITY_NOTE(spokenAloud) +
+          "\n\n" +
+          GENDER_GRAMMAR_NOTE(sonderGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
           (opener ? "\n\n" + firstOpenerInstruction() : "") +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
