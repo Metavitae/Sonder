@@ -6,6 +6,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Build
+import android.util.Log
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -32,6 +34,8 @@ import java.util.concurrent.Executors
 // The voice model (~65 MB) isn't bundled in the APK: install() downloads it
 // once and unpacks it under filesDir. After that, speaking needs no network
 // at all.
+
+private const val TAG = "SonderTts"
 
 // Measured 2026-09-25: 2 threads was as fast as 4 on the POCO, and leaves
 // the other cores free for the UI.
@@ -215,9 +219,12 @@ class SonderTtsModule : Module() {
     val minBuffer = AudioTrack.getMinBufferSize(
       sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
     )
-    // ~30 s of room, so writing a sentence never has to wait for playback
-    // and synthesis of the next sentence can run ahead.
-    val bufferBytes = maxOf(minBuffer, sampleRate * 4 * 30)
+    // ~3 s of room: enough for synthesis of the next sentence to run ahead
+    // of playback. Not more: a streaming AudioTrack by default only starts
+    // once its buffer is full. Real bug found 2026-09-25 on the POCO: with
+    // a 30 s buffer a short reply never filled it, so the speaker sat at
+    // position 0 in silence forever (and later lines queued behind it).
+    val bufferBytes = maxOf(minBuffer, sampleRate * 4 * 3)
     val attributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_MEDIA)
       .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -241,18 +248,32 @@ class SonderTtsModule : Module() {
       .build()
     audioManager.requestAudioFocus(focus)
 
+    // Start as soon as ~0.2 s is queued rather than when the buffer is
+    // full (Android 12+; older phones start at 3 s or at the final stop()).
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      track.setStartThresholdInFrames(minOf(track.bufferSizeInFrames, sampleRate / 5))
+    }
+
     activeTrack = track
     val sink = SampleSink(track) { myGeneration == generation }
     try {
       track.play()
       engine.generateWithCallback(text = text, sid = 0, speed = 1.0f, callback = sink)
-      // Generation is done; wait for the speaker to actually finish.
+      Log.d(TAG, "generated ${sink.framesWritten} frames @ $sampleRate Hz, head=${track.playbackHeadPosition}")
+      if (myGeneration != generation) return false
+      // stop() on a streaming track plays out whatever is still queued (and
+      // starts it, if it never reached the start threshold), then stops.
+      track.stop()
+      // Wait for the speaker to actually finish — bounded, so a stuck
+      // speaker can never block every later line again.
+      val deadline = System.currentTimeMillis() + sink.framesWritten * 1000 / sampleRate + 2000
       while (myGeneration == generation &&
-        track.playState == AudioTrack.PLAYSTATE_PLAYING &&
-        track.playbackHeadPosition.toLong() < sink.framesWritten
+        track.playbackHeadPosition.toLong() < sink.framesWritten &&
+        System.currentTimeMillis() < deadline
       ) {
         Thread.sleep(30)
       }
+      Log.d(TAG, "playback done, head=${track.playbackHeadPosition}/${sink.framesWritten}")
       return myGeneration == generation
     } finally {
       if (activeTrack === track) activeTrack = null
