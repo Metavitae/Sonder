@@ -20,6 +20,15 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_SONDER_API_URL ?? "";
 // just goes silent with no explanation.
 const ORPHEUS_START_TIMEOUT_MS = 6000;
 
+// Diagnostic (2026-09-25): on the POCO, Orpheus replies start playing and
+// stop ~20ms later with no fallback, so the founder hears nothing. These
+// lines show up in `adb logcat -s ReactNativeJS` and trace every step of
+// the speak pipeline so the real stop cause can be read off the device.
+const t0 = Date.now();
+function vlog(...args: unknown[]) {
+  console.log(`[SonderVoice +${Date.now() - t0}ms]`, ...args);
+}
+
 function speakViaOrpheus(
   text: string,
   voice: UserVoice,
@@ -28,6 +37,7 @@ function speakViaOrpheus(
   return new Promise((resolve) => {
     const uri = `${API_BASE_URL}/speak?voice=${voice}&text=${encodeURIComponent(text)}`;
     const player = createAudioPlayer({ uri });
+    vlog("player created", player.id, "chars", text.length);
     onPlayerCreated(player);
     let settled = false;
 
@@ -48,12 +58,24 @@ function speakViaOrpheus(
       // from eventually transitioning to playing, so a late arrival could
       // speak right over whatever the native fallback (below) had already
       // said. pause() first, then remove().
+      vlog("start timeout fired, giving up on", player.id);
       player.pause();
       player.remove();
       finish(false);
     }, ORPHEUS_START_TIMEOUT_MS);
 
     player.addListener("playbackStatusUpdate", (status) => {
+      vlog("status", player.id, JSON.stringify({
+        settled,
+        playing: status.playing,
+        loaded: status.isLoaded,
+        buffering: status.isBuffering,
+        state: status.playbackState,
+        time: status.currentTime,
+        duration: status.duration,
+        finished: status.didJustFinish,
+        muted: status.mute,
+      }));
       if (settled) {
         // Arrived after we already gave up on this call (the slow-cold-
         // start case above) — don't let it start playing over whatever's
@@ -62,9 +84,13 @@ function speakViaOrpheus(
         return;
       }
       if (status.playing) finish(true);
-      if (status.didJustFinish) player.remove();
+      if (status.didJustFinish) {
+        vlog("didJustFinish, removing", player.id);
+        player.remove();
+      }
     });
 
+    vlog("play()", player.id);
     player.play();
   });
 }
@@ -109,6 +135,8 @@ export function useSpeak() {
 
   const speak = useCallback(async (text: string, voice: UserVoice, options?: { instant?: boolean }) => {
     const myGeneration = ++generationRef.current;
+    vlog("speak called, generation", myGeneration, "instant", !!options?.instant, "hasApi", !!API_BASE_URL);
+    if (activePlayerRef.current) vlog("barge-in: removing", activePlayerRef.current.id);
     // Barge-in: a new line always wins outright rather than layering over
     // whatever hasn't finished yet, on either channel.
     activePlayerRef.current?.remove();
@@ -128,21 +156,25 @@ export function useSpeak() {
         if (myGeneration !== generationRef.current) {
           // A newer call already barged in while this one was still
           // starting up — don't let this late player start playing too.
+          vlog("stale generation, removing new player", player.id);
           player.remove();
           return;
         }
         activePlayerRef.current?.remove();
         activePlayerRef.current = player;
       });
+      vlog("orpheus result", spoke, "generation", myGeneration, "current", generationRef.current);
       if (myGeneration !== generationRef.current) return;
       if (spoke) return;
     }
     if (myGeneration !== generationRef.current) return;
+    vlog("falling back to built-in TTS");
     Speech.speak(text);
   }, []);
 
   useEffect(() => {
     return () => {
+      vlog("useSpeak unmount cleanup, removing", activePlayerRef.current?.id);
       activePlayerRef.current?.remove();
       Speech.stop();
     };
