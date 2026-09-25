@@ -242,22 +242,14 @@ class SonderTtsModule : Module() {
     audioManager.requestAudioFocus(focus)
 
     activeTrack = track
-    var framesWritten = 0L
+    val sink = SampleSink(track) { myGeneration == generation }
     try {
       track.play()
-      engine.generateWithCallback(text = text, sid = 0, speed = 1.0f) { samples ->
-        if (myGeneration != generation) {
-          0 // stop generating
-        } else {
-          track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-          framesWritten += samples.size
-          1
-        }
-      }
+      engine.generateWithCallback(text = text, sid = 0, speed = 1.0f, callback = sink)
       // Generation is done; wait for the speaker to actually finish.
       while (myGeneration == generation &&
         track.playState == AudioTrack.PLAYSTATE_PLAYING &&
-        track.playbackHeadPosition.toLong() < framesWritten
+        track.playbackHeadPosition.toLong() < sink.framesWritten
       ) {
         Thread.sleep(30)
       }
@@ -280,6 +272,26 @@ class SonderTtsModule : Module() {
       track.flush()
     } catch (_: IllegalStateException) {
     }
+  }
+}
+
+// Receives each generated sentence from the engine and writes it to the
+// speaker. Must be a real class, not a Kotlin lambda: the engine's native
+// code looks up `invoke([F)Ljava/lang/Integer;` by name, and a lambda only
+// compiles to the erased `invoke(Object)Object`. Real crash found
+// 2026-09-25 on the POCO (NoSuchMethodError on ...ExternalSyntheticLambda0).
+private class SampleSink(
+  private val track: AudioTrack,
+  private val stillCurrent: () -> Boolean,
+) : (FloatArray) -> Int {
+  var framesWritten = 0L
+    private set
+
+  override fun invoke(samples: FloatArray): Int {
+    if (!stillCurrent()) return 0 // stop generating
+    track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+    framesWritten += samples.size
+    return 1
   }
 }
 
