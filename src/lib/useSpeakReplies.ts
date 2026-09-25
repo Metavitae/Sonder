@@ -8,7 +8,12 @@ import { useSpeak } from "./speak";
 // via the shared speak pipeline (speak.ts). Replies that arrive while voice
 // is off are still counted as handled — turning it back on later doesn't
 // read out a backlog.
-export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice, enabled: boolean) {
+export function useSpeakReplies(
+  messages: ChatMessage[],
+  voice: UserVoice,
+  enabled: boolean,
+  historyLoaded: boolean
+) {
   // Real bug found 2026-08-17 (Part 32 crisis-tripwire verification): -1,
   // not 0 — the "first mount" guard below used to compare against 0, which
   // collides with a *legitimate* first-ever messages.length of 0. That
@@ -22,8 +27,13 @@ export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice, enabl
   const speak = useSpeak();
 
   useEffect(() => {
-    // First mount: don't speak whatever history already exists (e.g. after
-    // a reload), only replies that arrive from here on.
+    // Real bug (founder report 2026-09-25): on every launch Sonder spoke the
+    // last line of the previous session. The baseline used to be taken on
+    // first mount, but restored history arrives a moment later (async
+    // load), so it looked "new". Wait for the load, then take the baseline.
+    if (!historyLoaded) return;
+    // Don't speak whatever history already exists (e.g. after a reload),
+    // only replies that arrive from here on.
     if (spokenCountRef.current === -1) {
       spokenCountRef.current = messages.length;
       return;
@@ -36,5 +46,5 @@ export function useSpeakReplies(messages: ChatMessage[], voice: UserVoice, enabl
     speak(lastReply.text, voice);
     // `enabled` read at the moment a reply lands, not a trigger itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, voice, speak]);
+  }, [messages, voice, speak, historyLoaded]);
 }

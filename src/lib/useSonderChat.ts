@@ -126,6 +126,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
   // render (before loadStoredMessages() resolves) and overwrite real
   // storage with [].
   const hasLoadedHistoryRef = useRef(false);
+  // Same moment as hasLoadedHistoryRef, but as state so useSpeakReplies can
+  // wait for it: restored history must not be mistaken for new replies.
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   // Real bug found 2026-08-18 (live on-device retest of Part 33, chasing
   // Part 34 item 1): loadStoredMessages() is async, but nothing stopped
   // send() from firing before it resolved — a message sent in that window
@@ -141,6 +144,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
       if (cancelled) return;
       if (stored.length > 0) setMessages(stored);
       hasLoadedHistoryRef.current = true;
+      setHistoryLoaded(true);
       // Item 3: no history at all means this is the first-ever
       // conversation — Sonder speaks first instead of leaving someone new
       // to companion apps facing an empty chat. Fire-and-forget: send()
@@ -275,5 +279,5 @@ export function useSonderChat(onVoiceOn?: () => void) {
     }
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send };
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, historyLoaded };
 }

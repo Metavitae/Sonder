@@ -61,7 +61,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send } =
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, historyLoaded } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -171,7 +171,7 @@ export default function ChatScreen() {
   // useSpeakReplies watches `messages` and speaks each new Sonder reply
   // aloud in Sonder's voice (voice/speak declared above, shared with the
   // dream/wake lines) — unless the user has turned voice off.
-  useSpeakReplies(messages, voice, voiceEnabled);
+  useSpeakReplies(messages, voice, voiceEnabled, historyLoaded);
 
   // On-device voice (founder decision 2026-09-25): fetched once (~65 MB)
   // and warmed up in the background, only once voice is actually on, so
