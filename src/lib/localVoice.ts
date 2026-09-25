@@ -71,7 +71,23 @@ export function hasLocalVoice(voice: UserVoice): boolean {
 export function speakLocally(text: string, voice: UserVoice): Promise<boolean> {
   const local = LOCAL_VOICES[voice];
   if (!SonderTts || !local) return Promise.reject(new Error("No local voice"));
-  return SonderTts.speak(local.id, local.modelFile, text);
+  return SonderTts.speak(local.id, local.modelFile, pacedForSpeech(text));
+}
+
+// Founder, by ear (2026-09-25): the voice rushed through "...", ";" and
+// dashes as if they weren't there. Piper only pauses properly between
+// sentences, so those become sentence breaks (and get the native module's
+// sentence gap). Commas are left alone — they already get a short pause.
+export function pacedForSpeech(text: string): string {
+  return text
+    .replace(/\s*(\.\.\.|…)\s*(?=\S)/g, ". ")
+    .replace(/\s*(\.\.\.|…)\s*$/g, ".")
+    .replace(/\s*;\s*/g, ". ")
+    .replace(/\s+[—–-]\s+|\s*[—–]\s*/g, ". ")
+    .replace(/([.!?])\.\s/g, "$1 ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/([.!?] )([a-z])/g, (_, gap: string, c: string) => gap + c.toUpperCase())
+    .trim();
 }
 
 export function stopLocalVoice(): void {

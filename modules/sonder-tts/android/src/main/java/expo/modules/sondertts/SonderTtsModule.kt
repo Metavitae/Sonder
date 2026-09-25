@@ -37,6 +37,14 @@ import java.util.concurrent.Executors
 
 private const val TAG = "SonderTts"
 
+// Pace picked by the founder by ear, 2026-09-25 (style "G"): ~15% brisker
+// than the voice's default (Piper length_scale 0.85), plus a real 0.45 s
+// pause between sentences — the model's own sentence gaps felt rushed and
+// "slow all over". (localVoice.ts also turns "...", ";" and dashes into
+// sentence breaks so those get the pause too.)
+private const val SPEED = 1f / 0.85f
+private const val SENTENCE_GAP_SECONDS = 0.45f
+
 // Measured 2026-09-25: 2 threads was as fast as 4 on the POCO, and leaves
 // the other cores free for the UI.
 private const val NUM_THREADS = 2
@@ -255,10 +263,10 @@ class SonderTtsModule : Module() {
     }
 
     activeTrack = track
-    val sink = SampleSink(track) { myGeneration == generation }
+    val sink = SampleSink(track, (sampleRate * SENTENCE_GAP_SECONDS).toInt()) { myGeneration == generation }
     try {
       track.play()
-      engine.generateWithCallback(text = text, sid = 0, speed = 1.0f, callback = sink)
+      engine.generateWithCallback(text = text, sid = 0, speed = SPEED, callback = sink)
       Log.d(TAG, "generated ${sink.framesWritten} frames @ $sampleRate Hz, head=${track.playbackHeadPosition}")
       if (myGeneration != generation) return false
       // stop() on a streaming track plays out whatever is still queued (and
@@ -267,10 +275,13 @@ class SonderTtsModule : Module() {
       // Wait for the speaker to actually finish — bounded, so a stuck
       // speaker can never block every later line again.
       val deadline = System.currentTimeMillis() + sink.framesWritten * 1000 / sampleRate + 2000
-      while (myGeneration == generation &&
-        track.playbackHeadPosition.toLong() < sink.framesWritten &&
-        System.currentTimeMillis() < deadline
-      ) {
+      // The head resets to 0 once a stopped track has drained, so a drop
+      // means it's done (seen on the POCO: head=0/91392 after playback).
+      var lastHead = 0L
+      while (myGeneration == generation && System.currentTimeMillis() < deadline) {
+        val head = track.playbackHeadPosition.toLong()
+        if (head >= sink.framesWritten || head < lastHead) break
+        lastHead = head
         Thread.sleep(30)
       }
       Log.d(TAG, "playback done, head=${track.playbackHeadPosition}/${sink.framesWritten}")
@@ -301,15 +312,23 @@ class SonderTtsModule : Module() {
 // code looks up `invoke([F)Ljava/lang/Integer;` by name, and a lambda only
 // compiles to the erased `invoke(Object)Object`. Real crash found
 // 2026-09-25 on the POCO (NoSuchMethodError on ...ExternalSyntheticLambda0).
+// Called once per sentence (maxNumSentences = 1); puts the sentence gap
+// before every sentence but the first.
 private class SampleSink(
   private val track: AudioTrack,
+  gapFrames: Int,
   private val stillCurrent: () -> Boolean,
 ) : (FloatArray) -> Int {
+  private val gap = FloatArray(gapFrames)
   var framesWritten = 0L
     private set
 
   override fun invoke(samples: FloatArray): Int {
     if (!stillCurrent()) return 0 // stop generating
+    if (framesWritten > 0 && gap.isNotEmpty()) {
+      track.write(gap, 0, gap.size, AudioTrack.WRITE_BLOCKING)
+      framesWritten += gap.size
+    }
     track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
     framesWritten += samples.size
     return 1
