@@ -89,7 +89,8 @@
         }
       ],
       "expo-local-authentication",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withPhoneAbisOnly.js"
     ],
     "experiments": {
       "typedRoutes": true,
