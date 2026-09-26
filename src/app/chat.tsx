@@ -28,6 +28,7 @@ import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 import { t } from "../lib/i18n";
+import { useAutoHideStatusBar, useKeyboardSpace } from "../lib/useChatChrome";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -68,6 +69,8 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const { color, intensity } = moodToMist(mood);
   const insets = useSafeAreaInsets();
+  const keyboardSpace = useKeyboardSpace();
+  const revealStatusBar = useAutoHideStatusBar();
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   // Founder request (2026-09-25): a way back to the newest message after
@@ -208,7 +211,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchStart={revealStatusBar}>
       <SpriteMistPoC color={color} intensity={mistIntensity} />
       <Animated.View
         pointerEvents="none"
@@ -238,12 +241,14 @@ export default function ChatScreen() {
         // leaving the input reachability entirely up to the Activity's
         // adjustResize mode — which wasn't reliably keeping the input row
         // visible above the keyboard on real hardware, matching "keyboard
-        // almost unaccessible." "height" actively resizes this view's
-        // content when the keyboard opens instead of trusting that alone.
+        // almost unaccessible." Android now gets explicit padding from
+        // useKeyboardSpace instead ("height" left a band after closing).
       }
       <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={[styles.flex, { paddingBottom: keyboardSpace }]}
+        // Android's own KeyboardAvoidingView math is wrong under edge-to-edge
+        // (see useKeyboardSpace); there the padding above does the work.
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.flex}>
         <ScrollView
