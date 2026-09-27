@@ -526,7 +526,7 @@ const CAMERA_TRUTH_NOTE =
   "phone; it turns what it sees into a few words, and those go along with " +
   "your message so I can answer you. Kithe keeps none of it. The AI service " +
   "that helps me write may hold technical logs for up to 30 days, only for " +
-  "safety checks. Everything we write here stays on your phone.\"";
+  "safety checks. And the diary itself is only kept on your phone.\"";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
