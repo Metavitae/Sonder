@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -29,6 +27,11 @@ import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 import { t } from "../lib/i18n";
 import { useAutoHideStatusBar, useKeyboardSpace } from "../lib/useChatChrome";
+import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDisclosure";
+import { DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
+import type { DiaryEntry } from "../lib/diaryLayout";
+import { useDiaryPaper } from "../lib/diaryPaper";
+import { PAPER_STYLE, SONDER_FONT, SONDER_INK } from "../lib/diaryInk";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -37,6 +40,14 @@ import { useAutoHideStatusBar, useKeyboardSpace } from "../lib/useChatChrome";
 const DREAM_INTENSITY = 0.1;
 const DREAM_OVERLAY_OPACITY = 0.45;
 const WAKE_LINE_DURATION_MS = 2500;
+const TOP_BAR = 44;
+
+// Diary reframe (2026-09-27 instructions, item 4): the one-time disclosure
+// fades in over the blank page, holds long enough to read, then fades away
+// on its own — tapping it dismisses it early. Never a modal.
+const DISCLOSURE_FADE_IN_MS = 1200;
+const DISCLOSURE_HOLD_MS = 6000;
+const DISCLOSURE_FADE_OUT_MS = 900;
 
 // Item 4's "quiet tonal/behavioral change" — a much subtler cue than the
 // dream overlay above, on purpose: this is closeness, not sleep. A low-
@@ -72,41 +83,17 @@ export default function ChatScreen() {
   const keyboardSpace = useKeyboardSpace();
   const revealStatusBar = useAutoHideStatusBar();
   const inputRef = useRef<TextInput>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  // Founder request (2026-09-25): a way back to the newest message after
-  // scrolling up to reread. The chat only follows new messages while the
-  // reader is already at the bottom; otherwise a "↓" button appears (mint
-  // when something new arrived below) and jumps back down.
-  const atBottomRef = useRef(true);
-  // Only a finger scroll can take the reader "away" from the bottom — the
-  // chat's own animated scrollToEnd passes through not-at-bottom positions
-  // too, and must not flash the button or stop following new messages.
-  const userScrolledRef = useRef(false);
-  const [showJump, setShowJump] = useState(false);
-  const [unseenBelow, setUnseenBelow] = useState(false);
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const fromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-    const atBottom = fromBottom < 80;
-    if (!atBottom && !userScrolledRef.current) return;
-    if (atBottom) userScrolledRef.current = false;
-    atBottomRef.current = atBottom;
-    setShowJump(!atBottom);
-    if (atBottom) setUnseenBelow(false);
-  }, []);
-  const handleContentSizeChange = useCallback(() => {
-    if (atBottomRef.current) {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    } else {
-      setUnseenBelow(true);
-    }
-  }, []);
+  const bookRef = useRef<DiaryBookHandle>(null);
+  const { paper, setPaper } = useDiaryPaper();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  // The book's height with the keyboard closed, fixed for the session so
+  // opening the keyboard never re-cuts the pages (see DiaryBook).
+  const bookHeight = windowHeight - insets.top - TOP_BAR - insets.bottom;
+  // Founder request (2026-09-25), carried into the diary: a way back to
+  // the latest page after turning back to reread.
+  const [atLatest, setAtLatest] = useState(true);
   const jumpToLatest = useCallback(() => {
-    userScrolledRef.current = false;
-    atBottomRef.current = true;
-    setShowJump(false);
-    setUnseenBelow(false);
-    scrollRef.current?.scrollToEnd({ animated: true });
+    bookRef.current?.goToLatest();
   }, []);
   // Per Part 22/25 item 9 — read continuously, but only the reading at the
   // moment the opening send fires actually matters; useSonderChat only acts
@@ -154,6 +141,42 @@ export default function ChatScreen() {
 
   const dreamOverlayStyle = useAnimatedStyle(() => ({ opacity: dreamOverlay.value }));
 
+  // Diary reframe item 4 — shown once ever. Marked seen the moment it
+  // appears (not on dismiss), so closing the app mid-fade still counts.
+  const [showDisclosure, setShowDisclosure] = useState(false);
+  const disclosureOpacity = useSharedValue(0);
+  useEffect(() => {
+    let cancelled = false;
+    hasSeenDiaryDisclosure().then((seen) => {
+      if (cancelled || seen) return;
+      markDiaryDisclosureSeen();
+      setShowDisclosure(true);
+      disclosureOpacity.value = withTiming(1, { duration: DISCLOSURE_FADE_IN_MS });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [disclosureOpacity]);
+  useEffect(() => {
+    if (!showDisclosure) return;
+    const id = setTimeout(() => {
+      disclosureOpacity.value = withTiming(0, { duration: DISCLOSURE_FADE_OUT_MS });
+    }, DISCLOSURE_FADE_IN_MS + DISCLOSURE_HOLD_MS);
+    const done = setTimeout(
+      () => setShowDisclosure(false),
+      DISCLOSURE_FADE_IN_MS + DISCLOSURE_HOLD_MS + DISCLOSURE_FADE_OUT_MS
+    );
+    return () => {
+      clearTimeout(id);
+      clearTimeout(done);
+    };
+  }, [showDisclosure, disclosureOpacity]);
+  const dismissDisclosure = useCallback(() => {
+    disclosureOpacity.value = withTiming(0, { duration: 300 });
+    setTimeout(() => setShowDisclosure(false), 300);
+  }, [disclosureOpacity]);
+  const disclosureStyle = useAnimatedStyle(() => ({ opacity: disclosureOpacity.value }));
+
   // Item 4 — read continuously, applied to both the ambient visual (below)
   // and sent with every turn (not opening-gated like presence) so Sonder's
   // actual language shifts too, per groq.ts's HEADPHONES_GUIDANCE.
@@ -192,6 +215,26 @@ export default function ChatScreen() {
     applyTraitSignal(traitSignal);
   }, [traitSignal, applyTraitSignal]);
 
+  // Everything on the page: stored entries, then whatever Sonder is doing
+  // right now (thinking, dozing, waking, a failed reply) as transient lines.
+  const diaryEntries: DiaryEntry[] = messages.map((m, i) => ({
+    key: String(i),
+    role: m.role,
+    text: m.text,
+    at: m.at,
+    ink: m.ink,
+  }));
+  if (isWaiting) {
+    diaryEntries.push({ key: "pending", role: "sonder", text: coldStartLine ?? "...", tone: "pending" });
+  } else if (isDreaming) {
+    diaryEntries.push({ key: "dream", role: "sonder", text: dreamLine, tone: "dream" });
+  } else if (wakeLine) {
+    diaryEntries.push({ key: "wake", role: "sonder", text: wakeLine, tone: "pending" });
+  }
+  if (error && !isWaiting) {
+    diaryEntries.push({ key: "error", role: "sonder", text: error, tone: "pending" });
+  }
+
   const handleInputChange = (text: string) => {
     noteActivity();
     setInput(text);
@@ -199,6 +242,7 @@ export default function ChatScreen() {
 
   const handleSend = () => {
     const text = input;
+    if (!text.trim()) return;
     setInput("");
     noteActivity();
     send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
@@ -221,11 +265,34 @@ export default function ChatScreen() {
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.dreamOverlay, dreamOverlayStyle]}
       />
-      {
-        // Autumn/Troy pills removed per founder (2026-09-14 instructions,
-        // item 4) — which voice is fixed by onboarding; this only mutes it.
-      }
-      <View style={[styles.voicePicker, { top: 12 + insets.top }]}>
+      <View style={[styles.topBar, { marginTop: insets.top }]}>
+        {
+          // Founder decision 2026-09-27: white page or brown page
+          // ("like an adventurer's notebook"), the user's choice.
+        }
+        <View style={styles.paperPicker}>
+          {(["white", "brown"] as const).map((p) => (
+            <Pressable
+              key={p}
+              onPress={() => setPaper(p)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                p === "white" ? t("White paper", "Papel blanco") : t("Brown paper", "Papel café")
+              }
+              style={[
+                styles.paperSwatch,
+                { backgroundColor: PAPER_STYLE[p].page },
+                paper === p && styles.paperSwatchActive,
+              ]}
+            />
+          ))}
+        </View>
+        {
+          // Autumn/Troy pills removed per founder (2026-09-14 instructions,
+          // item 4) — which voice is fixed by onboarding; this only mutes it.
+          // Its position is the founder's call (2026-09-26): leave it here.
+        }
         <Pressable
           style={[styles.voicePill, voiceEnabled && styles.voicePillActive]}
           onPress={() => setVoiceEnabled(!voiceEnabled)}
@@ -236,85 +303,51 @@ export default function ChatScreen() {
         </Pressable>
       </View>
       {
-        // Real bug (founder report, Part 24): `behavior: undefined` on
-        // Android means KeyboardAvoidingView is a complete no-op there,
-        // leaving the input reachability entirely up to the Activity's
-        // adjustResize mode — which wasn't reliably keeping the input row
-        // visible above the keyboard on real hardware, matching "keyboard
-        // almost unaccessible." Android now gets explicit padding from
-        // useKeyboardSpace instead ("height" left a band after closing).
+        // Android's own KeyboardAvoidingView math is wrong under edge-to-edge
+        // (see useKeyboardSpace); there the padding does the work, and the
+        // book slides up to the line being written instead of shrinking.
       }
       <KeyboardAvoidingView
         style={[styles.flex, { paddingBottom: keyboardSpace }]}
-        // Android's own KeyboardAvoidingView math is wrong under edge-to-edge
-        // (see useKeyboardSpace); there the padding above does the work.
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.flex}>
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          onScroll={handleScroll}
-          onScrollBeginDrag={() => {
-            userScrolledRef.current = true;
-          }}
-          scrollEventThrottle={100}
-          onContentSizeChange={handleContentSizeChange}
-        >
-          {messages.map((m, i) => (
-            <View
-              key={i}
-              style={[styles.bubble, m.role === "user" ? styles.userBubble : styles.sonderBubble]}
-            >
-              <Text style={styles.bubbleText}>{m.text}</Text>
-            </View>
-          ))}
-          {isWaiting && (
-            <View style={[styles.bubble, styles.sonderBubble]}>
-              <Text style={styles.bubbleText}>{coldStartLine ?? "..."}</Text>
-            </View>
-          )}
-          {!isWaiting && isDreaming && (
-            <View style={[styles.bubble, styles.sonderBubble, styles.dreamBubble]}>
-              <Text style={[styles.bubbleText, styles.dreamText]}>{dreamLine}</Text>
-            </View>
-          )}
-          {!isWaiting && !isDreaming && wakeLine && (
-            <View style={[styles.bubble, styles.sonderBubble]}>
-              <Text style={styles.bubbleText}>{wakeLine}</Text>
-            </View>
-          )}
-          {error && <Text style={styles.error}>{error}</Text>}
-        </ScrollView>
-        {showJump && (
+        <DiaryBook
+          ref={bookRef}
+          entries={diaryEntries}
+          paper={paper}
+          feeling={color}
+          bookHeight={bookHeight}
+          pageWidth={windowWidth}
+          keyboardOpen={keyboardSpace > 0}
+          input={input}
+          onChangeInput={handleInputChange}
+          onSend={handleSend}
+          inputRef={inputRef}
+          onLatestChange={setAtLatest}
+        />
+        {showDisclosure && (
+          <Animated.View style={[styles.disclosureWrap, disclosureStyle]}>
+            <Pressable onPress={dismissDisclosure} hitSlop={24}>
+              <Text style={[styles.disclosureText, { color: SONDER_INK[color] }]}>
+                {t(
+                  "This is a private page. Sonder — not a person — may write back.",
+                  "Esta es una página privada. Sonder —no una persona— puede escribirte."
+                )}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
+        {!atLatest && (
           <Pressable
-            style={[styles.jumpButton, unseenBelow && styles.jumpButtonNew]}
+            style={styles.jumpButton}
             onPress={jumpToLatest}
             accessibilityRole="button"
-            accessibilityLabel={t("Jump to the latest message", "Ir al mensaje más reciente")}
+            accessibilityLabel={t("Go to the latest page", "Ir a la página más reciente")}
             hitSlop={8}
           >
-            <Text style={[styles.jumpText, unseenBelow && styles.jumpTextNew]}>↓</Text>
+            <Text style={styles.jumpText}>»</Text>
           </Pressable>
         )}
-        </View>
-        <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            value={input}
-            onChangeText={handleInputChange}
-            placeholder={t("Say something to Sonder...", "Dile algo a Sonder...")}
-            placeholderTextColor="#c9c9c9"
-            onSubmitEditing={handleSend}
-            autoFocus
-            blurOnSubmit={false}
-          />
-          <Pressable style={styles.sendButton} onPress={handleSend}>
-            <Text style={styles.sendText}>{t("Send", "Enviar")}</Text>
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -323,23 +356,38 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   flex: { flex: 1 },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 16, gap: 8 },
-  bubble: { padding: 12, borderRadius: 12, maxWidth: "85%" },
-  userBubble: { backgroundColor: "rgba(58,44,82,0.75)", alignSelf: "flex-end" },
-  sonderBubble: { backgroundColor: "rgba(0,0,0,0.45)", alignSelf: "flex-start" },
-  bubbleText: { color: "#FFFFFF", fontSize: 15 },
-  dreamBubble: { opacity: 0.8 },
-  dreamText: { fontStyle: "italic" },
-  dreamOverlay: { backgroundColor: "#000" },
-  headphonesOverlay: { backgroundColor: "#7a4a2b" },
-  voicePicker: {
-    position: "absolute",
-    right: 16,
+  topBar: {
+    height: TOP_BAR,
+    paddingHorizontal: 16,
     flexDirection: "row",
-    gap: 6,
+    alignItems: "center",
+    justifyContent: "space-between",
     zIndex: 10,
   },
+  paperPicker: { flexDirection: "row", gap: 10 },
+  paperSwatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  paperSwatchActive: { borderWidth: 2, borderColor: "#FFFFFF" },
+  disclosureWrap: {
+    position: "absolute",
+    left: 48,
+    right: 48,
+    top: "30%",
+    alignItems: "center",
+  },
+  disclosureText: {
+    fontFamily: SONDER_FONT,
+    fontSize: 17,
+    lineHeight: 26,
+    textAlign: "center",
+  },
+  dreamOverlay: { backgroundColor: "#000" },
+  headphonesOverlay: { backgroundColor: "#7a4a2b" },
   voicePill: {
     backgroundColor: "rgba(0,0,0,0.45)",
     borderRadius: 999,
@@ -352,8 +400,8 @@ const styles = StyleSheet.create({
   error: { color: "#ff8a8a", padding: 8 },
   jumpButton: {
     position: "absolute",
-    right: 16,
-    bottom: 12,
+    right: 28,
+    bottom: 28,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -361,28 +409,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  jumpButtonNew: { backgroundColor: "#7CFFB2" },
-  jumpText: { color: "#F0E6FF", fontSize: 22, fontWeight: "600", lineHeight: 24 },
-  jumpTextNew: { color: "#000" },
-  inputRow: {
-    flexDirection: "row",
-    padding: 12,
-    gap: 8,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    color: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  sendButton: {
-    backgroundColor: "#7CFFB2",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    justifyContent: "center",
-  },
-  sendText: { color: "#000", fontWeight: "700" },
+  jumpText: { color: "#F0E6FF", fontSize: 24, fontWeight: "600", lineHeight: 26 },
 });

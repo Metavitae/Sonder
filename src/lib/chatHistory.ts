@@ -9,8 +9,12 @@ const STORAGE_KEY = "sonder_chat_history_v1";
 
 // The server already caps what it sends to Groq to the last 40 items
 // (MAX_HISTORY_TURNS in index.ts) — this cap is only about bounding
-// on-device storage/scrollback, not the model's context window.
-const MAX_STORED_MESSAGES = 200;
+// on-device storage, not the model's context window. Was 200 (scrollback
+// only); raised 2026-09-27 because the chat is now a diary, and a diary
+// can't quietly lose its old pages. 5000 entries stays well inside
+// Android AsyncStorage's default 6 MB — move to file storage before any
+// real user gets near it.
+const MAX_STORED_MESSAGES = 5000;
 
 // Real bug, resurfaced 2026-08-31 during Part 75/76 testing (same class as
 // Part 71's "fixed for real this time"): [[mood:WARMTH:MED]] showed up as

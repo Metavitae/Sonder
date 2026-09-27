@@ -1,0 +1,355 @@
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  FlatList,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
+import {
+  buildRows,
+  type DiaryEntry,
+  type DiaryRow,
+  measureKey,
+  paginate,
+  type Paper,
+} from "../../lib/diaryLayout";
+import { PAPER_STYLE, SONDER_FONT, SONDER_INK, USER_FONT, USER_INK } from "../../lib/diaryInk";
+import type { MistColor } from "../../lib/mistAtlas";
+import { t } from "../../lib/i18n";
+
+// One ruled line. Every row — a line of writing, a date, the line being
+// typed — is exactly this tall, so the writing always sits on the rules.
+export const LINE = 32;
+const FONT_SIZE = 18;
+const PAD_TOP = 34;
+const PAD_BOTTOM = 30;
+const PAD_X = 22;
+// Space between the book and the screen edge — where the mist (Sonder's
+// feelings) shows around the notebook.
+export const BOOK_MARGIN = 16;
+
+export type DiaryBookHandle = {
+  goToLatest: () => void;
+};
+
+type Props = {
+  entries: DiaryEntry[];
+  paper: Paper;
+  // Sonder's current feeling — the glow around the page.
+  feeling: MistColor;
+  // The full height the book gets with the keyboard closed. Fixed, so the
+  // keyboard opening never re-cuts the pages; instead the book slides up
+  // to the line being written (founder: like a notebook tilted toward you).
+  bookHeight: number;
+  pageWidth: number;
+  keyboardOpen: boolean;
+  input: string;
+  onChangeInput: (text: string) => void;
+  onSend: () => void;
+  inputRef: React.RefObject<TextInput | null>;
+  onLatestChange: (atLatest: boolean) => void;
+};
+
+function lineStyle(role: "user" | "sonder") {
+  return role === "sonder" ? styles.sonderText : styles.userText;
+}
+
+export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
+  {
+    entries,
+    paper,
+    feeling,
+    bookHeight,
+    pageWidth,
+    keyboardOpen,
+    input,
+    onChangeInput,
+    onSend,
+    inputRef,
+    onLatestChange,
+  },
+  ref
+) {
+  const textWidth = pageWidth - BOOK_MARGIN * 2 - PAD_X * 2;
+  const pageHeight = bookHeight - BOOK_MARGIN * 2;
+  const linesPerPage = Math.max(8, Math.floor((pageHeight - PAD_TOP - PAD_BOTTOM) / LINE));
+  const paperStyle = PAPER_STYLE[paper];
+
+  // --- Measuring: the real text engine breaks each entry into lines at the
+  // page's exact width; the result is cached per entry so each is measured
+  // once. Pages are only drawn once everything stored has been measured.
+  const measuredRef = useRef(new Map<string, string[]>());
+  const [measureTick, setMeasureTick] = useState(0);
+  const widthRef = useRef(textWidth);
+  if (widthRef.current !== textWidth) {
+    widthRef.current = textWidth;
+    measuredRef.current = new Map();
+  }
+  const unmeasured = entries.filter((e) => !measuredRef.current.has(measureKey(e)));
+  const recordLines = useCallback((key: string, lines: string[]) => {
+    if (measuredRef.current.has(key)) return;
+    measuredRef.current.set(key, lines.length > 0 ? lines : [""]);
+    setMeasureTick((n) => n + 1);
+  }, []);
+  const storedAllMeasured = entries.every(
+    (e) => e.tone !== undefined || measuredRef.current.has(measureKey(e))
+  );
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (storedAllMeasured) setReady(true);
+  }, [storedAllMeasured]);
+
+  const pages = useMemo(() => {
+    const rows = buildRows(entries, measuredRef.current);
+    const cut = paginate(rows, linesPerPage);
+    // The line being written needs room: if the last page is full, the
+    // writing continues on a fresh page.
+    if (cut[cut.length - 1].length >= linesPerPage) cut.push([]);
+    return cut;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, linesPerPage, measureTick]);
+  const lastIndex = pages.length - 1;
+
+  // --- Turning pages.
+  const listRef = useRef<FlatList<DiaryRow[]>>(null);
+  const indexRef = useRef(lastIndex);
+  const atLatestRef = useRef(true);
+  const setIndex = useCallback(
+    (i: number) => {
+      indexRef.current = i;
+      const atLatest = i >= lastIndex;
+      if (atLatest !== atLatestRef.current) {
+        atLatestRef.current = atLatest;
+        onLatestChange(atLatest);
+      }
+    },
+    [lastIndex, onLatestChange]
+  );
+  const goToLatest = useCallback(() => {
+    listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
+    setIndex(lastIndex);
+  }, [lastIndex, setIndex]);
+  useImperativeHandle(ref, () => ({ goToLatest }), [goToLatest]);
+
+  // New writing moves the reader along only if they were already on the
+  // latest page — someone rereading an old page is left where they are.
+  const prevLastRef = useRef(lastIndex);
+  useEffect(() => {
+    if (lastIndex !== prevLastRef.current) {
+      const wasAtLatest = indexRef.current >= prevLastRef.current;
+      prevLastRef.current = lastIndex;
+      if (wasAtLatest && ready) {
+        listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
+        indexRef.current = lastIndex;
+      } else {
+        setIndex(indexRef.current);
+      }
+    }
+  }, [lastIndex, ready, setIndex]);
+
+  const handleMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      setIndex(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
+    },
+    [pageWidth, setIndex]
+  );
+
+  // Typing on an older page makes no sense — tapping to write takes you to
+  // the latest page first.
+  const lastPageRows = pages[lastIndex].length;
+
+  // --- Keyboard: slide the book up so the line being written sits just
+  // above the keyboard, instead of squeezing the page.
+  const tiltRef = useRef<ScrollView>(null);
+  const [visibleHeight, setVisibleHeight] = useState(bookHeight);
+  const [inputLines, setInputLines] = useState(1);
+  useEffect(() => {
+    if (!keyboardOpen) {
+      tiltRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    const writingBottom =
+      BOOK_MARGIN + PAD_TOP + (lastPageRows + inputLines) * LINE + LINE / 2;
+    const y = Math.max(0, writingBottom - visibleHeight);
+    tiltRef.current?.scrollTo({ y, animated: true });
+  }, [keyboardOpen, visibleHeight, lastPageRows, inputLines]);
+
+  const renderRow = (row: DiaryRow, i: number) => {
+    if (row.kind === "date") {
+      return (
+        <Text key={i} style={[styles.row, styles.dateText, { color: paperStyle.faint }]} numberOfLines={1}>
+          {row.text}
+        </Text>
+      );
+    }
+    const color = row.role === "sonder" ? SONDER_INK[row.ink ?? feeling] : USER_INK;
+    return (
+      <Text
+        key={i}
+        style={[
+          styles.row,
+          lineStyle(row.role),
+          { color },
+          row.tone === "pending" && styles.pending,
+          row.tone === "dream" && styles.dream,
+        ]}
+        numberOfLines={1}
+      >
+        {row.text}
+      </Text>
+    );
+  };
+
+  const renderPage = ({ item, index }: { item: DiaryRow[]; index: number }) => {
+    const isLast = index === lastIndex;
+    return (
+      <View style={{ width: pageWidth, height: bookHeight, padding: BOOK_MARGIN }}>
+        <View
+          style={[
+            styles.page,
+            { backgroundColor: paperStyle.page, shadowColor: SONDER_INK[feeling] },
+          ]}
+        >
+          {Array.from({ length: linesPerPage }, (_, k) => (
+            <View
+              key={k}
+              style={[styles.rule, { top: PAD_TOP + (k + 1) * LINE - 1, backgroundColor: paperStyle.rule }]}
+            />
+          ))}
+          <View style={styles.writing}>
+            {item.map(renderRow)}
+            {isLast && (
+              <View>
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.input, styles.userText, { color: USER_INK }]}
+                  value={input}
+                  onChangeText={onChangeInput}
+                  onContentSizeChange={(e) =>
+                    setInputLines(Math.max(1, Math.round(e.nativeEvent.contentSize.height / LINE)))
+                  }
+                  multiline
+                  submitBehavior="submit"
+                  returnKeyType="send"
+                  onSubmitEditing={onSend}
+                  autoFocus
+                  cursorColor={USER_INK}
+                  selectionColor="rgba(43,35,28,0.25)"
+                  accessibilityLabel={t("Write in the diary", "Escribe en el diario")}
+                />
+                {input.trim().length > 0 && (
+                  <Pressable
+                    onPress={onSend}
+                    style={styles.send}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("Send", "Enviar")}
+                  >
+                    <Text style={[styles.sendText, { color: SONDER_INK[feeling] }]}>↵</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </View>
+          <Text style={[styles.pageNumber, { color: paperStyle.faint }]}>{index + 1}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.flex}>
+      {
+        // Invisible measuring pass — same width and type as the page.
+      }
+      <View style={[styles.measure, { width: textWidth }]} pointerEvents="none">
+        {unmeasured.map((e) => {
+          const key = measureKey(e);
+          return (
+            <Text
+              key={key}
+              style={[styles.measureText, lineStyle(e.role)]}
+              onTextLayout={(ev) =>
+                recordLines(
+                  key,
+                  ev.nativeEvent.lines.map((l) => l.text.replace(/[\s​]+$/, ""))
+                )
+              }
+            >
+              {e.text}
+            </Text>
+          );
+        })}
+      </View>
+      {ready && (
+        <ScrollView
+          ref={tiltRef}
+          scrollEnabled={false}
+          style={styles.flex}
+          onLayout={(e) => setVisibleHeight(e.nativeEvent.layout.height)}
+          keyboardShouldPersistTaps="handled"
+        >
+          <FlatList
+            ref={listRef}
+            data={pages}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => String(i)}
+            renderItem={renderPage}
+            getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
+            initialScrollIndex={lastIndex}
+            onMomentumScrollEnd={handleMomentumEnd}
+            keyboardShouldPersistTaps="handled"
+            extraData={[input, feeling, paper, lastIndex]}
+            style={{ height: bookHeight }}
+            windowSize={3}
+            initialNumToRender={2}
+          />
+        </ScrollView>
+      )}
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  page: {
+    flex: 1,
+    borderRadius: 4,
+    overflow: "visible",
+    // The glow around the page takes Sonder's current feeling.
+    elevation: 18,
+    shadowOpacity: 0.9,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  rule: { position: "absolute", left: 0, right: 0, height: 1 },
+  writing: { paddingTop: PAD_TOP, paddingHorizontal: PAD_X },
+  row: { height: LINE, lineHeight: LINE, fontSize: FONT_SIZE, includeFontPadding: false },
+  sonderText: { fontFamily: SONDER_FONT, fontSize: FONT_SIZE },
+  userText: { fontFamily: USER_FONT, fontSize: FONT_SIZE },
+  dateText: { fontSize: 13, fontStyle: "italic", letterSpacing: 0.3 },
+  pending: { opacity: 0.55 },
+  dream: { fontStyle: "italic", opacity: 0.75 },
+  input: {
+    minHeight: LINE,
+    lineHeight: LINE,
+    padding: 0,
+    paddingRight: 30,
+    margin: 0,
+    textAlignVertical: "top",
+    includeFontPadding: false,
+  },
+  send: { position: "absolute", right: 0, bottom: 2 },
+  sendText: { fontSize: 22, fontWeight: "700" },
+  pageNumber: { position: "absolute", bottom: 8, alignSelf: "center", fontSize: 12 },
+  measure: { position: "absolute", top: 0, left: 0, opacity: 0 },
+  measureText: { lineHeight: LINE, includeFontPadding: false },
+});

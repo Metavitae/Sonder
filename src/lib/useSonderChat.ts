@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
+import type { MistColor } from "./mistAtlas";
+import { moodToMist } from "./moodToMist";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
 import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
@@ -24,7 +26,16 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_SONDER_API_URL ?? "";
 // needed for that distinction.
 const COLD_START_REVEAL_MS = 1200;
 
-export type ChatMessage = { role: "user" | "sonder"; text: string };
+// `at` (when it was written) and `ink` (the feeling Sonder wrote it with)
+// feed the diary pages (founder, 2026-09-27): a new day gets a date line,
+// and each of Sonder's lines keeps the color of the feeling of its moment.
+// Both are optional — entries stored before then have neither.
+export type ChatMessage = {
+  role: "user" | "sonder";
+  text: string;
+  at?: number;
+  ink?: MistColor;
+};
 
 // Duplicated from server/src/groq.ts's Warmth/Arousal/Mood — client and
 // server are separate packages with no shared types module, and this is a
@@ -38,6 +49,12 @@ export type Mood = { warmth: Warmth; arousal: Arousal };
 const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
 type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal; voiceOn?: boolean };
+
+// Sonder's reply as a diary entry: dated, in the ink of the feeling it came
+// with (no mood tag → the neutral default, same as the mist's).
+function sonderEntry(text: string, mood: Mood | undefined): ChatMessage {
+  return { role: "sonder", text, at: Date.now(), ink: moodToMist(mood ?? DEFAULT_MOOD).color };
+}
 
 async function requestChat(
   text: string,
@@ -54,7 +71,11 @@ async function requestChat(
       "EXPO_PUBLIC_SONDER_API_URL is not set — point it at the deployed Render service"
     );
   }
-  const body: Record<string, unknown> = { message: text, history, sessionOpening };
+  // The server only ever reads the last 40 (MAX_HISTORY_TURNS in
+  // server/src/index.ts), and the diary now keeps everything — so only the
+  // recent part travels, and only the words.
+  const recent = history.slice(-40).map((m) => ({ role: m.role, text: m.text }));
+  const body: Record<string, unknown> = { message: text, history: recent, sessionOpening };
   // Per Part 72 — sent every turn, same stateless-per-request shape as
   // headphones/presence below; the server never persists this.
   if (traitWeights) {
@@ -156,7 +177,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
         requestChat("", [], false, undefined, undefined, undefined, false, true)
           .then((data) => {
             if (cancelled || !data.reply) return;
-            setMessages((prev) => (prev.length === 0 ? [{ role: "sonder", text: data.reply }] : prev));
+            setMessages((prev) =>
+              prev.length === 0 ? [sonderEntry(data.reply, data.mood)] : prev
+            );
             if (data.mood) setMood(data.mood);
           })
           .catch(() => {
@@ -201,8 +224,8 @@ export function useSonderChat(onVoiceOn?: () => void) {
     if (isCrisisMessage(text)) {
       setMessages((prev) => [
         ...prev,
-        { role: "user", text },
-        { role: "sonder", text: crisisResponseFor(text) },
+        { role: "user", text, at: Date.now() },
+        sonderEntry(crisisResponseFor(text), undefined),
       ]);
       return;
     }
@@ -221,7 +244,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
     let historyForRequest: ChatMessage[] = [];
     setMessages((prev) => {
       historyForRequest = prev;
-      return [...prev, { role: "user", text }];
+      return [...prev, { role: "user", text, at: Date.now() }];
     });
     setIsWaiting(true);
     setColdStartLine(null);
@@ -266,7 +289,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
         );
       }
       if (data.voiceOn) onVoiceOnRef.current?.();
-      setMessages((prev) => [...prev, { role: "sonder", text: data.reply }]);
+      setMessages((prev) => [...prev, sonderEntry(data.reply, data.mood)]);
       if (data.mood) setMood(data.mood);
       setTraitSignal(data.traitSignal ?? null);
     } catch (err) {
