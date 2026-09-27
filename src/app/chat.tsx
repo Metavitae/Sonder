@@ -252,9 +252,17 @@ export default function ChatScreen() {
     setInput(text);
   };
 
+  // Real bug (on the POCO, 2026-09-27): one Enter press sent the same line
+  // twice — submit can fire twice before the cleared input re-renders, and
+  // both calls read the same text. Same text within a moment = one send.
+  const lastSendRef = useRef<{ text: string; at: number } | null>(null);
   const handleSend = () => {
     const text = input;
     if (!text.trim()) return;
+    const now = Date.now();
+    const last = lastSendRef.current;
+    if (last && last.text === text && now - last.at < 1500) return;
+    lastSendRef.current = { text, at: now };
     setInput("");
     noteActivity();
     send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);

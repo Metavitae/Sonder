@@ -139,19 +139,28 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
 
   // New writing moves the reader along only if they were already on the
   // latest page — someone rereading an old page is left where they are.
+  // Real bug (on the POCO, 2026-09-27): Sonder's transient "thinking" line
+  // can spill onto a new page and then vanish when the reply lands, so the
+  // page count goes up and back down. Scrolling toward the page that then
+  // disappeared left the book stranded halfway between two pages. Now any
+  // change in the page count re-seats a reader who was on the latest page
+  // exactly on the new last page (animated only when moving forward).
   const prevLastRef = useRef(lastIndex);
   useEffect(() => {
-    if (lastIndex !== prevLastRef.current) {
-      const wasAtLatest = indexRef.current >= prevLastRef.current;
-      prevLastRef.current = lastIndex;
-      if (wasAtLatest && ready) {
-        listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
-        indexRef.current = lastIndex;
-      } else {
-        setIndex(indexRef.current);
-      }
+    const prevLast = prevLastRef.current;
+    if (lastIndex === prevLast) return;
+    prevLastRef.current = lastIndex;
+    const wasAtLatest = indexRef.current >= prevLast;
+    if (wasAtLatest && ready) {
+      listRef.current?.scrollToOffset({
+        offset: lastIndex * pageWidth,
+        animated: lastIndex > prevLast,
+      });
+      indexRef.current = lastIndex;
+    } else {
+      setIndex(Math.min(indexRef.current, lastIndex));
     }
-  }, [lastIndex, ready, setIndex]);
+  }, [lastIndex, ready, setIndex, pageWidth]);
 
   const handleMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
