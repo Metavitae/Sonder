@@ -513,7 +513,20 @@ const CAMERA_TRUTH_NOTE =
   "- The AI service that helps you write (Groq) doesn't keep it either, " +
   "except that it may hold technical logs for up to 30 days, only for safety " +
   "and abuse checks. That's the only place anything waits, and it isn't Kithe.\n" +
-  "- The diary itself lives only on their phone.";
+  "- The diary itself lives only on their phone.\n" +
+  "Always cover all of it: yes plus how to turn it off; only expressions, " +
+  "the picture stays on the phone; the few words DO leave the phone with " +
+  "their message; Kithe keeps nothing; the AI service's up-to-30-day " +
+  "safety logs. NEVER say that nothing is sent or that nothing leaves the " +
+  "phone — the few words do, and saying otherwise is a lie. Example of the " +
+  "shape (put it in your own words and their language, don't copy it): " +
+  "\"Yes, I can see you, because you let me when we set up. You can switch " +
+  "it off in Settings > Apps > Sonder > Permissions > Camera. I only notice " +
+  "expressions, like a smile or tired eyes. The picture never leaves your " +
+  "phone; it turns what it sees into a few words, and those go along with " +
+  "your message so I can answer you. Kithe keeps none of it. The AI service " +
+  "that helps me write may hold technical logs for up to 30 days, only for " +
+  "safety checks. Everything we write here stays on your phone.\"";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
