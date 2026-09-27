@@ -100,6 +100,16 @@ function parseShortText(value: unknown): string | undefined {
     : undefined;
 }
 
+// Sonder's sight (founder, 2026-09-27: "that was the whole idea for Sonder
+// to have a sense of sight"): a few plain words about the user's face while
+// they wrote this turn, built on the phone from the camera — never an image,
+// never numbers. Same one-request-only, never-stored treatment as weather.
+function parseSight(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 200
+    ? value.trim()
+    : undefined;
+}
+
 app.post("/chat", async (req, res) => {
   // First-conversation opener (2026-09-14 proactive instructions, item 3):
   // Sonder speaks first, so there's no user message to require.
@@ -141,6 +151,7 @@ app.post("/chat", async (req, res) => {
   const local = {
     localTime: parseShortText(req.body?.localTime),
     weather: parseShortText(req.body?.weather),
+    sight: parseSight(req.body?.sight),
   };
   try {
     // Waits out any in-flight startup load instead of racing it — a real

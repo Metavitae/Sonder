@@ -25,6 +25,8 @@ import { useSpeak } from "../lib/speak";
 import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
+import { SightSense } from "../components/SightSense";
+import { useCameraPermission } from "react-native-vision-camera";
 import { t } from "../lib/i18n";
 import { useAutoHideStatusBar, useKeyboardSpace } from "../lib/useChatChrome";
 import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDisclosure";
@@ -141,6 +143,16 @@ export default function ChatScreen() {
 
   const dreamOverlayStyle = useAnimatedStyle(() => ({ opacity: dreamOverlay.value }));
 
+  // Sonder's sight (founder, 2026-09-27): the camera keeps looking from
+  // inside the diary — only if the camera was already allowed at
+  // onboarding (never asked for here). How well Sonder can see the user
+  // dims and cools the mist; see SightSense for the rest.
+  const { hasPermission: sightAllowed } = useCameraPermission();
+  const sightQuality = useSharedValue(1);
+  const sightOverlayStyle = useAnimatedStyle(() => ({
+    opacity: (1 - sightQuality.value) * 0.55,
+  }));
+
   // Diary reframe item 4 — shown once ever. Marked seen the moment it
   // appears (not on dismiss), so closing the app mid-fade still counts.
   const [showDisclosure, setShowDisclosure] = useState(false);
@@ -256,7 +268,17 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.container} onTouchStart={revealStatusBar}>
+      {sightAllowed && <SightSense quality={sightQuality} />}
+      {
+        // Always opaque, always above the camera: its feed is never on
+        // screen (founder rule, 2026-08-13).
+      }
+      <View style={styles.blackBackdrop} pointerEvents="none" />
       <SpriteMistPoC color={color} intensity={mistIntensity} />
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFillObject, styles.sightOverlay, sightOverlayStyle]}
+      />
       <Animated.View
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.headphonesOverlay, headphonesOverlayStyle]}
@@ -387,6 +409,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   dreamOverlay: { backgroundColor: "#000" },
+  blackBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
+  sightOverlay: { backgroundColor: "#0d1a2b" },
   headphonesOverlay: { backgroundColor: "#7a4a2b" },
   voicePill: {
     backgroundColor: "rgba(0,0,0,0.45)",

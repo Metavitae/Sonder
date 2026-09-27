@@ -436,7 +436,7 @@ function extractVoiceOn(raw: string): { reply: string; voiceOn: boolean } {
 // localTime is the phone's own clock (no permission); weather is only
 // present if the user granted coarse location, and arrives already reduced
 // to a short summary — the server never sees coordinates.
-export type LocalContext = { localTime?: string; weather?: string };
+export type LocalContext = { localTime?: string; weather?: string; sight?: string };
 
 // Founder, 2026-09-25: in Spanish, gender changes the words ("estoy
 // contenta/contento", "nerviosa/nervioso"). Sonder's own gender is set at
@@ -470,6 +470,20 @@ const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
   ". Let this color what you say only when it genuinely fits — the way a " +
   "friend might mention the rain or that it's late — never force it in, " +
   "and don't bring it up every turn.";
+
+// Sonder's sense of sight (Complete Reference §8 + "Sonder's Senses - Beyond
+// the Voice": sight reads the user, not just the room, once camera access
+// is granted). Founder, 2026-09-27: the diary looks back — Sonder should
+// know the reactions on the user's face. It arrives as a few plain words
+// built on the phone; the camera image never leaves the device.
+const SIGHT_NOTE = (sight: string) =>
+  "What you could see of them while they were writing this (they allowed " +
+  `you to see them): ${sight}. Let it quietly shape your tone and what you ` +
+  "notice, the way a friend across the table would. You may gently touch on " +
+  "it when it genuinely matters (a smile over hard news, a tired face late " +
+  "at night), but never describe their face clinically, never mention " +
+  "cameras, tracking or data, and don't comment on it every turn. If it " +
+  "seems to disagree with their words, trust their words and stay curious.";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
@@ -575,6 +589,7 @@ export async function generateReply(
           "\n\n" +
           GENDER_GRAMMAR_NOTE(sonderGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
+          (local.sight ? "\n\n" + SIGHT_NOTE(local.sight) : "") +
           (opener ? "\n\n" + firstOpenerInstruction() : "") +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +

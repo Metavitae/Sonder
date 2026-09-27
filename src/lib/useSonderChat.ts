@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
 import type { MistColor } from "./mistAtlas";
 import { moodToMist } from "./moodToMist";
+import { takeSightSummary } from "./sightReading";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
 import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
@@ -64,7 +65,8 @@ async function requestChat(
   headphonesConnected?: boolean,
   traitWeights?: TraitWeights,
   voiceEnabled = false,
-  opener = false
+  opener = false,
+  sight: string | null = null
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -111,6 +113,9 @@ async function requestChat(
   const weather = await currentWeatherSummary();
   if (weather) body.weather = weather;
   if (opener) body.opener = true;
+  // Sonder's sight (2026-09-27): a few plain words about the user's face
+  // while they wrote this — see sightReading.ts. Never an image.
+  if (sight) body.sight = sight;
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -213,6 +218,8 @@ export function useSonderChat(onVoiceOn?: () => void) {
     setError(null);
     const sessionOpening = sessionOpeningRef.current;
     sessionOpeningRef.current = false;
+    // Taken now, once — a cold-start retry below reuses the same words.
+    const sight = takeSightSummary();
 
     // Per "Kithe - Sonder's Complete Reference" §7 (Crisis Protocol) and
     // "Sonder - Direct Instructions for CC 2026-08-17 Part 32" — runs
@@ -265,7 +272,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
           openingPresence,
           headphonesConnected,
           traitWeights,
-          voiceEnabled
+          voiceEnabled,
+          false,
+          sight
         );
       } catch (firstErr) {
         // Real bug found 2026-08-14 (founder's first live test, Part 24):
@@ -285,7 +294,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
           openingPresence,
           headphonesConnected,
           traitWeights,
-          voiceEnabled
+          voiceEnabled,
+          false,
+          sight
         );
       }
       if (data.voiceOn) onVoiceOnRef.current?.();

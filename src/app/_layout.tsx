@@ -91,6 +91,7 @@ export default function RootLayout() {
           <Stack.Protected guard={onboardingComplete}>
             <Stack.Screen name="index" />
             <Stack.Screen name="chat" />
+            <Stack.Screen name="sense-test" />
           </Stack.Protected>
           <Stack.Protected guard={!onboardingComplete}>
             <Stack.Screen name="onboarding" />
