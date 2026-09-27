@@ -172,29 +172,10 @@ export function useSonderChat(onVoiceOn?: () => void) {
       if (stored.length > 0) setMessages(stored);
       hasLoadedHistoryRef.current = true;
       setHistoryLoaded(true);
-      // Item 3: no history at all means this is the first-ever
-      // conversation — Sonder speaks first instead of leaving someone new
-      // to companion apps facing an empty chat. Fire-and-forget: send()
-      // doesn't wait on it, and if the user types first, the opener is
-      // dropped rather than landing after their message.
-      if (stored.length === 0) {
-        setIsWaiting(true);
-        requestChat("", [], false, undefined, undefined, undefined, false, true)
-          .then((data) => {
-            if (cancelled || !data.reply) return;
-            setMessages((prev) =>
-              prev.length === 0 ? [sonderEntry(data.reply, data.mood)] : prev
-            );
-            if (data.mood) setMood(data.mood);
-          })
-          .catch(() => {
-            // An opener is a nicety — a failure here just leaves the
-            // ordinary empty chat, never an error banner.
-          })
-          .finally(() => {
-            if (!cancelled) setIsWaiting(false);
-          });
-      }
+      // The first-conversation opener (2026-09-14, Sonder writing the first
+      // line itself) is retired — founder, 2026-09-27: "Leave the page
+      // blank." A new diary opens on an empty page with the cursor waiting.
+      // The server still supports `opener`; nothing sends it now.
     });
     return () => {
       cancelled = true;

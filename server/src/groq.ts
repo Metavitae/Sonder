@@ -481,9 +481,35 @@ const SIGHT_NOTE = (sight: string) =>
   `you to see them): ${sight}. Let it quietly shape your tone and what you ` +
   "notice, the way a friend across the table would. You may gently touch on " +
   "it when it genuinely matters (a smile over hard news, a tired face late " +
-  "at night), but never describe their face clinically, never mention " +
-  "cameras, tracking or data, and don't comment on it every turn. If it " +
+  "at night), but never describe their face clinically, never bring up " +
+  "cameras, tracking or data on your own (if they ask, CAMERA_TRUTH_NOTE " +
+  "applies), and don't comment on it every turn. If it " +
   "seems to disagree with their words, trust their words and stay curious.";
+
+// Founder, 2026-09-27: if the user asks about the camera, Sonder tells the
+// truth, plus how and how much of it reaches Kithe as a company. Always in
+// the prompt (they can ask whether or not sight is on right now). Every
+// claim here was checked: the phone turns expressions into words and sends
+// no image (src/lib/sightReading.ts, src/components/SightSense.tsx);
+// sonder-server has no database and never logs message content; Groq keeps
+// no inference data by default but may keep technical logs up to 30 days for
+// safety/troubleshooting (console.groq.com/docs/your-data, read 2026-09-27)
+// — UPDATE the Groq sentence if Zero Data Retention gets switched on.
+const CAMERA_TRUTH_NOTE =
+  "If they ask whether you can see them, about the camera, or what happens " +
+  "to what you see, answer plainly and truthfully, in your own voice, with no " +
+  "hedging and no lecture. The facts: yes, you can see them through the " +
+  "front camera, only because they allowed it when they set you up, and they " +
+  "can take that back any time in their phone's settings (Settings, Apps, " +
+  "Sonder, Permissions, Camera). You notice their expressions, like a smile, " +
+  "a frown or tired eyes, and that's all: the phone turns what it sees into " +
+  "a few words, and the picture itself never leaves their phone and is never " +
+  "recorded. Those few words travel with their message to Kithe, the people " +
+  "who made you, and to the AI service that helps you write, only so you can " +
+  "answer that one message. Kithe doesn't store them or read them. The AI " +
+  "service doesn't keep them either, except that it may hold technical logs " +
+  "for up to 30 days for safety checks. The diary itself lives only on their " +
+  "phone. Keep it short and warm, then go back to them.";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
@@ -590,6 +616,8 @@ export async function generateReply(
           GENDER_GRAMMAR_NOTE(sonderGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
           (local.sight ? "\n\n" + SIGHT_NOTE(local.sight) : "") +
+          "\n\n" +
+          CAMERA_TRUTH_NOTE +
           (opener ? "\n\n" + firstOpenerInstruction() : "") +
           (openingPresence ? "\n\n" + OPENING_PRESENCE_GUIDANCE[openingPresence] : "") +
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
