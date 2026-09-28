@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply, type ChatTurn, type Presence, type SonderGender, type Trait, type TraitWeights } from "./groq.js";
+import { generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -110,6 +110,15 @@ function parseSight(value: unknown): string | undefined {
     : undefined;
 }
 
+// Sonder's notes (see groq.ts SONDER_NOTES_NOTE): kept on the phone, relayed
+// for this one request, never stored or logged here. A little slack over
+// MAX_NOTES_CHARS so a note written right at the limit is never rejected.
+function parseNotes(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= MAX_NOTES_CHARS + 200
+    ? value.trim()
+    : undefined;
+}
+
 app.post("/chat", async (req, res) => {
   // First-conversation opener (2026-09-14 proactive instructions, item 3):
   // Sonder speaks first, so there's no user message to require.
@@ -170,12 +179,30 @@ app.post("/chat", async (req, res) => {
       openingPresence,
       headphonesConnected,
       traitWeights,
-      { spokenAloud, local, opener, sonderGender }
+      { spokenAloud, local, opener, sonderGender, notes: parseNotes(req.body?.notes) }
     );
     res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });
+  }
+});
+
+// Sonder rewrites its private notes from the latest diary pages. The phone
+// sends the notes and pages, gets the new notes back, and keeps them; this
+// server stores and logs none of it (only errors, never content).
+app.post("/notes", async (req, res) => {
+  const turns = parseHistory(req.body?.turns);
+  if (turns.length === 0) {
+    res.status(400).json({ error: "turns (non-empty array) is required" });
+    return;
+  }
+  try {
+    const notes = await updateNotes(parseNotes(req.body?.notes) ?? "", turns);
+    res.json({ notes });
+  } catch (err) {
+    console.error("[notes] error:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "notes failed" });
   }
 });
 

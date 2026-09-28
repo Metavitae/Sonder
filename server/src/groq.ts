@@ -486,6 +486,69 @@ const SIGHT_NOTE = (sight: string) =>
   "applies), and don't comment on it every turn. If it " +
   "seems to disagree with their words, trust their words and stay curious.";
 
+// Sonder's notes (diary build step 3; founder approved 2026-09-27, "fully
+// private" 2026-09-28): short notes Sonder keeps about the user, stored only
+// on their phone and sent with each turn, so it remembers past the last 40
+// messages. Never shown in the diary — but Sonder never lies about
+// remembering, either.
+export const MAX_NOTES_CHARS = 1500;
+
+const SONDER_NOTES_NOTE = (notes: string) =>
+  "Your own private notes about them, from earlier in your diary together " +
+  "(older than the conversation below):\n" +
+  notes +
+  "\n\nRemember these the way a friend simply remembers — bring something " +
+  "back only when it genuinely fits the moment, never recite the list, and " +
+  "never mention notes, memory or storage on your own. If they ask what you " +
+  "remember, answer honestly and naturally, never pretend to forget or " +
+  "remember less than you do. If they ask you to forget something, agree " +
+  "warmly and stop bringing it up.";
+
+const NOTE_KEEPING_INSTRUCTION =
+  "You are Sonder, keeping your own short private notes about the person " +
+  "you share a diary with, so you can remember them after older pages fall " +
+  "out of view. You get your current notes and the latest pages of the " +
+  "diary. Rewrite the notes, merging in what's new.\n\n" +
+  "Keep what a close friend would remember: people in their life (names and " +
+  "who they are), what's going on for them and how it turned out, things " +
+  "they're looking forward to or dreading, what they love and dislike, how " +
+  "they like to be treated, and anything you promised to remember or ask " +
+  "about. Update or drop what's no longer true.\n\n" +
+  "Rules: plain short lines, one fact per line, starting with \"- \". Warm " +
+  "and factual, never clinical — no diagnoses or labels. Only what they " +
+  "actually said or clearly showed; never guess. Nothing about Kithe as a " +
+  "company, money, data or other users. Write each line in the language " +
+  "they mostly write in. Keep the whole thing under " +
+  MAX_NOTES_CHARS +
+  " characters; when space runs out, keep what matters most to them. " +
+  "Reply with the notes only, nothing else.";
+
+// Rewrites Sonder's notes from the current notes plus the latest diary
+// pages. Called by POST /notes; nothing is stored here.
+export async function updateNotes(notes: string, turns: ChatTurn[]): Promise<string> {
+  const pages = turns
+    .map((t) => `${t.role === "user" ? "Them" : "You (Sonder)"}: ${t.text}`)
+    .join("\n");
+  const completion = await getClient().chat.completions.create({
+    model: MODEL,
+    temperature: 0.3,
+    messages: [
+      { role: "system", content: NOTE_KEEPING_INSTRUCTION },
+      {
+        role: "user",
+        content:
+          "Current notes:\n" +
+          (notes.trim() || "(none yet)") +
+          "\n\nLatest diary pages:\n" +
+          pages,
+      },
+    ],
+  });
+  const raw = (completion.choices[0]?.message?.content ?? "").trim();
+  if (!raw) throw new Error("empty notes");
+  return raw.slice(0, MAX_NOTES_CHARS);
+}
+
 // Founder, 2026-09-27: if the user asks about the camera, Sonder tells the
 // truth, plus how and how much of it reaches Kithe as a company. Always in
 // the prompt (they can ask whether or not sight is on right now). Every
@@ -589,7 +652,14 @@ export async function generateReply(
     local = {},
     opener = false,
     sonderGender,
-  }: { spokenAloud?: boolean; local?: LocalContext; opener?: boolean; sonderGender?: SonderGender } = {}
+    notes,
+  }: {
+    spokenAloud?: boolean;
+    local?: LocalContext;
+    opener?: boolean;
+    sonderGender?: SonderGender;
+    notes?: string;
+  } = {}
 ): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
@@ -633,6 +703,7 @@ export async function generateReply(
           GENDER_GRAMMAR_NOTE(sonderGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
           (local.sight ? "\n\n" + SIGHT_NOTE(local.sight) : "") +
+          (notes ? "\n\n" + SONDER_NOTES_NOTE(notes) : "") +
           "\n\n" +
           CAMERA_TRUTH_NOTE +
           (opener ? "\n\n" + firstOpenerInstruction() : "") +

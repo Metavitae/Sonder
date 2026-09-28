@@ -7,6 +7,7 @@ import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
 import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
+import { currentSonderNotes, maybeUpdateSonderNotes } from "./sonderNotes";
 import type { Presence } from "./motion";
 import type { TraitSignal, TraitWeights } from "./characterTraits";
 import { noteUserMessageLanguage, say } from "./i18n";
@@ -116,6 +117,10 @@ async function requestChat(
   // Sonder's sight (2026-09-27): a few plain words about the user's face
   // while they wrote this — see sightReading.ts. Never an image.
   if (sight) body.sight = sight;
+  // Sonder's private notes (sonderNotes.ts) — what it remembers from
+  // before the last 40 messages.
+  const notes = await currentSonderNotes();
+  if (notes) body.notes = notes;
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -185,6 +190,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
   useEffect(() => {
     if (!hasLoadedHistoryRef.current) return;
     persistMessages(messages);
+    maybeUpdateSonderNotes(messages);
   }, [messages]);
 
   const send = useCallback(async (
