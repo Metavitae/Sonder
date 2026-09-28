@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 
 import {
   buildRows,
@@ -19,7 +20,16 @@ import {
   paginate,
   type Paper,
 } from "../../lib/diaryLayout";
-import { PAPER_STYLE, SONDER_FONT, SONDER_INK, USER_FONT, sonderInk, userInk } from "../../lib/diaryInk";
+import {
+  PAPER_STYLE,
+  RIBBON_RED,
+  SONDER_FONT,
+  SONDER_INK,
+  USER_FONT,
+  sonderInk,
+  userInk,
+} from "../../lib/diaryInk";
+import { type Bookmark, bookmarkId } from "../../lib/diaryBookmarks";
 import type { MistColor } from "../../lib/mistAtlas";
 import { t } from "../../lib/i18n";
 
@@ -36,6 +46,7 @@ export const BOOK_MARGIN = 16;
 
 export type DiaryBookHandle = {
   goToLatest: () => void;
+  goToBookmark: (b: Bookmark) => void;
 };
 
 type Props = {
@@ -54,6 +65,9 @@ type Props = {
   onSend: () => void;
   inputRef: React.RefObject<TextInput | null>;
   onLatestChange: (atLatest: boolean) => void;
+  bookmarks: Bookmark[];
+  onAddBookmark: (b: Bookmark) => void;
+  onRemoveBookmarks: (ids: string[]) => void;
 };
 
 function lineStyle(role: "user" | "sonder") {
@@ -73,6 +87,9 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     onSend,
     inputRef,
     onLatestChange,
+    bookmarks,
+    onAddBookmark,
+    onRemoveBookmarks,
   },
   ref
 ) {
@@ -116,6 +133,58 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   }, [entries, linesPerPage, measureTick]);
   const lastIndex = pages.length - 1;
 
+  // --- Bookmarks: a ribbon marks the writing, not the page number, so on
+  // every re-cut each ribbon is found again by the line it anchors to. A
+  // page's own anchor is its first real (stored) line.
+  const { pageAnchors, pageOfBookmark } = useMemo(() => {
+    const lineToPage = new Map<string, number>();
+    const anchors: (Bookmark | null)[] = pages.map((page, i) => {
+      let anchor: Bookmark | null = null;
+      page.forEach((row, r) => {
+        if (row.kind !== "line" || row.tone) return;
+        lineToPage.set(bookmarkId(row), i);
+        if (!anchor) {
+          const words = page
+            .slice(r)
+            .filter((x) => x.kind === "line" && !x.tone)
+            .slice(0, 2)
+            .map((x) => x.text)
+            .join(" ");
+          anchor = { entryKey: row.entryKey, lineIdx: row.lineIdx, at: row.at, label: words };
+        }
+      });
+      return anchor;
+    });
+    // If the anchored line no longer exists (the entry now wraps into fewer
+    // lines), fall back to where that entry starts.
+    const pageOf = (b: Bookmark) =>
+      lineToPage.get(bookmarkId(b)) ?? lineToPage.get(bookmarkId({ entryKey: b.entryKey, lineIdx: 0 }));
+    return { pageAnchors: anchors, pageOfBookmark: pageOf };
+  }, [pages]);
+  const bookmarksByPage = useMemo(() => {
+    const byPage = new Map<number, string[]>();
+    for (const b of bookmarks) {
+      const page = pageOfBookmark(b);
+      if (page === undefined) continue;
+      byPage.set(page, [...(byPage.get(page) ?? []), bookmarkId(b)]);
+    }
+    return byPage;
+  }, [bookmarks, pageOfBookmark]);
+  const toggleRibbon = useCallback(
+    (pageIndex: number) => {
+      const marked = bookmarksByPage.get(pageIndex);
+      if (marked) {
+        onRemoveBookmarks(marked);
+      } else {
+        const anchor = pageAnchors[pageIndex];
+        if (!anchor) return;
+        onAddBookmark(anchor);
+      }
+      Haptics.selectionAsync().catch(() => {});
+    },
+    [bookmarksByPage, pageAnchors, onAddBookmark, onRemoveBookmarks]
+  );
+
   // --- Turning pages.
   const listRef = useRef<FlatList<DiaryRow[]>>(null);
   const indexRef = useRef(lastIndex);
@@ -135,7 +204,16 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
     setIndex(lastIndex);
   }, [lastIndex, setIndex]);
-  useImperativeHandle(ref, () => ({ goToLatest }), [goToLatest]);
+  const goToBookmark = useCallback(
+    (b: Bookmark) => {
+      const page = pageOfBookmark(b);
+      if (page === undefined) return;
+      listRef.current?.scrollToIndex({ index: page, animated: true });
+      setIndex(page);
+    },
+    [pageOfBookmark, setIndex]
+  );
+  useImperativeHandle(ref, () => ({ goToLatest, goToBookmark }), [goToLatest, goToBookmark]);
 
   // New writing moves the reader along only if they were already on the
   // latest page — someone rereading an old page is left where they are.
@@ -267,6 +345,27 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             )}
           </View>
           <Text style={[styles.pageNumber, { color: paperStyle.faint }]}>{index + 1}</Text>
+          {pageAnchors[index] && (
+            <Pressable
+              onPress={() => toggleRibbon(index)}
+              hitSlop={{ top: 12, bottom: 12, left: 16, right: 12 }}
+              style={styles.ribbonHit}
+              accessibilityRole="button"
+              accessibilityLabel={
+                bookmarksByPage.has(index)
+                  ? t("Remove the ribbon from this page", "Quitar el listón de esta página")
+                  : t("Mark this page with a ribbon", "Marcar esta página con un listón")
+              }
+            >
+              {bookmarksByPage.has(index) ? (
+                <View style={styles.ribbon}>
+                  <View style={[styles.ribbonNotch, { borderBottomColor: paperStyle.page }]} />
+                </View>
+              ) : (
+                <View style={styles.ribbonHint} />
+              )}
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -316,7 +415,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             initialScrollIndex={lastIndex}
             onMomentumScrollEnd={handleMomentumEnd}
             keyboardShouldPersistTaps="handled"
-            extraData={[input, feeling, paper, lastIndex]}
+            extraData={[input, feeling, paper, lastIndex, bookmarksByPage]}
             style={{ height: bookHeight }}
             windowSize={3}
             initialNumToRender={2}
@@ -360,6 +459,20 @@ const styles = StyleSheet.create({
   },
   send: { position: "absolute", right: 0, bottom: 2 },
   sendText: { fontSize: 22, fontWeight: "700" },
+  // The ribbon hangs from the page's top edge, inside the right margin so
+  // it never covers writing. Unmarked pages show only a faint stub to tap.
+  ribbonHit: { position: "absolute", top: 0, right: 5, width: 16, alignItems: "center" },
+  ribbon: { width: 14, height: 64, backgroundColor: RIBBON_RED, justifyContent: "flex-end" },
+  ribbonNotch: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderBottomWidth: 7,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  ribbonHint: { width: 14, height: 16, backgroundColor: RIBBON_RED, opacity: 0.18 },
   pageNumber: { position: "absolute", bottom: 8, alignSelf: "center", fontSize: 12 },
   measure: { position: "absolute", top: 0, left: 0, opacity: 0 },
   measureText: { lineHeight: LINE, includeFontPadding: false },

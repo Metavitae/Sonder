@@ -33,6 +33,10 @@ export type DiaryRow =
       text: string;
       ink?: MistColor;
       tone?: "pending" | "dream";
+      // Which entry, and which of its lines — what a bookmark anchors to.
+      entryKey: string;
+      lineIdx: number;
+      at?: number;
     };
 
 // Stable per entry and per text, so an edit (or a transient line changing
@@ -75,9 +79,18 @@ export function buildRows(
       }
     }
     const lines = measured.get(measureKey(entry)) ?? [entry.text];
-    for (const text of lines) {
-      rows.push({ kind: "line", role: entry.role, text, ink: entry.ink, tone: entry.tone });
-    }
+    lines.forEach((text, lineIdx) => {
+      rows.push({
+        kind: "line",
+        role: entry.role,
+        text,
+        ink: entry.ink,
+        tone: entry.tone,
+        entryKey: entry.key,
+        lineIdx,
+        at: entry.at,
+      });
+    });
   }
   return rows;
 }

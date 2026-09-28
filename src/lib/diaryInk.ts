@@ -36,6 +36,10 @@ export function sonderInk(color: MistColor, paper: Paper): string {
   return paper === "brown" ? SONDER_INK_ON_BROWN[color] : SONDER_INK[color];
 }
 
+// Founder, 2026-09-28: the user's bookmarks are a classic dark red ribbon,
+// like the one sewn into a real notebook — not Sonder's feeling color.
+export const RIBBON_RED = "#7A1F24";
+
 export const USER_INK = "#2B231C";
 export const USER_INK_ON_BROWN = "#1F170F";
 

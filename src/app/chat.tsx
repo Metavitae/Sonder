@@ -33,7 +33,9 @@ import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDis
 import { DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
-import { PAPER_STYLE, SONDER_FONT, sonderInk } from "../lib/diaryInk";
+import { PAPER_STYLE, RIBBON_RED, SONDER_FONT, sonderInk, userInk } from "../lib/diaryInk";
+import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
+import { formatDiaryDate } from "../lib/diaryLayout";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -87,6 +89,17 @@ export default function ChatScreen() {
   const inputRef = useRef<TextInput>(null);
   const bookRef = useRef<DiaryBookHandle>(null);
   const { paper, setPaper } = useDiaryPaper();
+  // The user's ribbons (founder, 2026-09-28): for the user to remember,
+  // so Sonder never places, sees or colors them.
+  const { bookmarks, addBookmark, removeBookmarks } = useDiaryBookmarks();
+  const [ribbonsOpen, setRibbonsOpen] = useState(false);
+  const sortedBookmarks = [...bookmarks].sort(
+    (a, b) => Number(a.entryKey) - Number(b.entryKey) || a.lineIdx - b.lineIdx
+  );
+  const openBookmark = useCallback((b: Bookmark) => {
+    setRibbonsOpen(false);
+    bookRef.current?.goToBookmark(b);
+  }, []);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   // The book's height with the keyboard closed, fixed for the session so
   // opening the keyboard never re-cuts the pages (see DiaryBook).
@@ -324,6 +337,17 @@ export default function ChatScreen() {
           // Its position is the founder's call (2026-09-26): leave it here.
         }
         <Pressable
+          onPress={() => setRibbonsOpen((o) => !o)}
+          hitSlop={10}
+          style={styles.ribbonButton}
+          accessibilityRole="button"
+          accessibilityLabel={t("Marked pages", "Páginas marcadas")}
+        >
+          <View style={styles.ribbonIcon}>
+            <View style={styles.ribbonIconNotch} />
+          </View>
+        </Pressable>
+        <Pressable
           style={[styles.voicePill, voiceEnabled && styles.voicePillActive]}
           onPress={() => setVoiceEnabled(!voiceEnabled)}
         >
@@ -354,7 +378,44 @@ export default function ChatScreen() {
           onSend={handleSend}
           inputRef={inputRef}
           onLatestChange={setAtLatest}
+          bookmarks={bookmarks}
+          onAddBookmark={addBookmark}
+          onRemoveBookmarks={removeBookmarks}
         />
+        {ribbonsOpen && (
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setRibbonsOpen(false)}>
+            <View style={[styles.ribbonList, { backgroundColor: PAPER_STYLE[paper].page }]}>
+              {sortedBookmarks.length === 0 ? (
+                <Text style={[styles.ribbonEmpty, { color: PAPER_STYLE[paper].faint }]}>
+                  {t(
+                    "No ribbons yet. Tap the top corner of a page to mark it.",
+                    "Aún no hay listones. Toca la esquina de arriba de una página para marcarla."
+                  )}
+                </Text>
+              ) : (
+                sortedBookmarks.map((b) => (
+                  <Pressable
+                    key={`${b.entryKey}:${b.lineIdx}`}
+                    onPress={() => openBookmark(b)}
+                    style={styles.ribbonRow}
+                  >
+                    <View style={styles.ribbonRowMark} />
+                    <View style={styles.flex}>
+                      {b.at !== undefined && (
+                        <Text style={[styles.ribbonDate, { color: PAPER_STYLE[paper].faint }]}>
+                          {formatDiaryDate(b.at)}
+                        </Text>
+                      )}
+                      <Text style={[styles.ribbonLabel, { color: userInk(paper) }]} numberOfLines={1}>
+                        {b.label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          </Pressable>
+        )}
         {showDisclosure && (
           <Animated.View style={[styles.disclosureWrap, disclosureStyle]}>
             <Pressable onPress={dismissDisclosure} hitSlop={24}>
@@ -395,6 +456,33 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   paperPicker: { flexDirection: "row", gap: 10 },
+  ribbonButton: { marginLeft: "auto", marginRight: 16, paddingVertical: 4 },
+  ribbonIcon: { width: 12, height: 22, backgroundColor: RIBBON_RED, justifyContent: "flex-end" },
+  ribbonIconNotch: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "#000",
+  },
+  ribbonList: {
+    position: "absolute",
+    top: 8,
+    left: 24,
+    right: 24,
+    maxHeight: "70%",
+    borderRadius: 4,
+    paddingVertical: 8,
+    elevation: 12,
+  },
+  ribbonEmpty: { padding: 16, fontSize: 15, lineHeight: 22, textAlign: "center" },
+  ribbonRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 16, gap: 12 },
+  ribbonRowMark: { width: 8, height: 28, backgroundColor: RIBBON_RED },
+  ribbonDate: { fontSize: 12, fontStyle: "italic" },
+  ribbonLabel: { fontSize: 16 },
   paperSwatch: {
     width: 22,
     height: 22,
