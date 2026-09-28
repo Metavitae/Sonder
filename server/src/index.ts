@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type TraitWeights } from "./groq.js";
+import { generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type UserGender, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -14,6 +14,12 @@ import {
 // client, not something the product design asked for. Well above what a
 // real conversation screen would realistically send in one turn.
 const MAX_HISTORY_TURNS = 40;
+
+// The user's own gender, picked at onboarding; anything else (older
+// builds, "Not specified") means "not stated".
+function parseUserGender(value: unknown): UserGender | undefined {
+  return value === "female" || value === "male" ? value : undefined;
+}
 
 function parseHistory(value: unknown): ChatTurn[] {
   if (!Array.isArray(value)) return [];
@@ -179,7 +185,7 @@ app.post("/chat", async (req, res) => {
       openingPresence,
       headphonesConnected,
       traitWeights,
-      { spokenAloud, local, opener, sonderGender, notes: parseNotes(req.body?.notes) }
+      { spokenAloud, local, opener, sonderGender, userGender: parseUserGender(req.body?.userGender), notes: parseNotes(req.body?.notes) }
     );
     res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
@@ -198,7 +204,7 @@ app.post("/notes", async (req, res) => {
     return;
   }
   try {
-    const notes = await updateNotes(parseNotes(req.body?.notes) ?? "", turns);
+    const notes = await updateNotes(parseNotes(req.body?.notes) ?? "", turns, parseUserGender(req.body?.userGender));
     res.json({ notes });
   } catch (err) {
     console.error("[notes] error:", err instanceof Error ? err.message : err);

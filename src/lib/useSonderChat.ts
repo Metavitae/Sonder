@@ -5,6 +5,7 @@ import { moodToMist } from "./moodToMist";
 import { takeSightSummary } from "./sightReading";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
+import { currentUserGender } from "./onboardingStorage";
 import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import { currentSonderNotes, maybeUpdateSonderNotes } from "./sonderNotes";
@@ -111,6 +112,8 @@ async function requestChat(
   // location was granted — see localContext.ts for the privacy shape.
   body.localTime = localTimeLabel();
   body.sonderGender = currentSonderGender();
+  const userGender = await currentUserGender();
+  if (userGender) body.userGender = userGender;
   const weather = await currentWeatherSummary();
   if (weather) body.weather = weather;
   if (opener) body.opener = true;

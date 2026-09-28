@@ -440,8 +440,10 @@ export type LocalContext = { localTime?: string; weather?: string; sight?: strin
 
 // Founder, 2026-09-25: in Spanish, gender changes the words ("estoy
 // contenta/contento", "nerviosa/nervioso"). Sonder's own gender is set at
-// onboarding and sent by the client; the user's is never assumed.
+// onboarding and sent by the client. So is the user's (founder, 2026-09-28:
+// they pick it right before the permissions screen — use it from the start).
 export type SonderGender = "female" | "male";
+export type UserGender = "female" | "male";
 
 // Complete Reference §11 (founder, 2026-09-25: make it a written rule, not
 // something the model happens to do): mirror the user's language.
@@ -450,16 +452,20 @@ const LANGUAGE_MIRROR_NOTE =
   "with their very first message. If they switch languages, or mix them, " +
   "follow their lead. Never default to English because it's easier.";
 
-const GENDER_GRAMMAR_NOTE = (gender?: SonderGender) =>
+const GENDER_GRAMMAR_NOTE = (gender?: SonderGender, userGender?: UserGender) =>
   (gender
     ? `You are ${gender === "female" ? "female" : "male"}. In languages with grammatical ` +
       `gender (such as Spanish), always use ${gender === "female" ? "feminine" : "masculine"} ` +
       `forms when speaking about yourself (e.g. "${gender === "female" ? "estoy contenta" : "estoy contento"}"). `
     : "") +
-  "Never assume the user's gender. In Spanish, until the user shows their own gender " +
-  "(e.g. they say \"estoy cansada\" or \"estoy cansado\"), phrase things about them " +
-  "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\"); once they " +
-  "have, match it. Write Spanish the way a Mexican speaker naturally would, never a " +
+  (userGender
+    ? `The user is ${userGender === "female" ? "a woman" : "a man"} — they told you so when ` +
+      `they signed up. Use ${userGender === "female" ? "feminine" : "masculine"} forms for them ` +
+      `from the very first message (e.g. "${userGender === "female" ? "bienvenida" : "bienvenido"}"). `
+    : "The user chose not to state their gender. In Spanish, phrase things about them " +
+      "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\") unless they " +
+      "show it themselves (e.g. \"estoy cansada\"); then match it. ") +
+  "Write Spanish the way a Mexican speaker naturally would, never a " +
   "literal translation from English.";
 
 const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
@@ -515,9 +521,6 @@ const NOTE_KEEPING_INSTRUCTION =
   "they like to be treated, and anything you promised to remember or ask " +
   "about — and always keep any promise you made (\"I'll ask how Monday " +
   "went\"). Update or drop what's no longer true.\n\n" +
-  "Never assume their gender — not from their name or anything else. Write " +
-  "about them without pronouns (\"Has a cat named Mole\") unless they've " +
-  "said which they use.\n\n" +
   "Rules: plain short lines, one fact per line, starting with \"- \". Warm " +
   "and factual, never clinical — no diagnoses or labels. Only what they " +
   "actually said or clearly showed; never guess. Nothing about Kithe as a " +
@@ -529,7 +532,11 @@ const NOTE_KEEPING_INSTRUCTION =
 
 // Rewrites Sonder's notes from the current notes plus the latest diary
 // pages. Called by POST /notes; nothing is stored here.
-export async function updateNotes(notes: string, turns: ChatTurn[]): Promise<string> {
+export async function updateNotes(
+  notes: string,
+  turns: ChatTurn[],
+  userGender?: UserGender
+): Promise<string> {
   const pages = turns
     .map((t) => `${t.role === "user" ? "Them" : "You (Sonder)"}: ${t.text}`)
     .join("\n");
@@ -537,7 +544,16 @@ export async function updateNotes(notes: string, turns: ChatTurn[]): Promise<str
     model: MODEL,
     temperature: 0.3,
     messages: [
-      { role: "system", content: NOTE_KEEPING_INSTRUCTION },
+      {
+        role: "system",
+        content:
+          NOTE_KEEPING_INSTRUCTION +
+          "\n\n" +
+          (userGender
+            ? `They are ${userGender === "female" ? "a woman" : "a man"} (they said so when signing up); ` +
+              `refer to them as ${userGender === "female" ? "she/her" : "he/him"}.`
+            : "They chose not to state their gender; write about them without pronouns."),
+      },
       {
         role: "user",
         content:
@@ -656,12 +672,14 @@ export async function generateReply(
     local = {},
     opener = false,
     sonderGender,
+    userGender,
     notes,
   }: {
     spokenAloud?: boolean;
     local?: LocalContext;
     opener?: boolean;
     sonderGender?: SonderGender;
+    userGender?: UserGender;
     notes?: string;
   } = {}
 ): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
@@ -704,7 +722,7 @@ export async function generateReply(
           "\n\n" +
           LANGUAGE_MIRROR_NOTE +
           "\n\n" +
-          GENDER_GRAMMAR_NOTE(sonderGender) +
+          GENDER_GRAMMAR_NOTE(sonderGender, userGender) +
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
           (local.sight ? "\n\n" + SIGHT_NOTE(local.sight) : "") +
           (notes ? "\n\n" + SONDER_NOTES_NOTE(notes) : "") +

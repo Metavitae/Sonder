@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ChatMessage } from "./useSonderChat";
+import { currentUserGender } from "./onboardingStorage";
 
 // Diary build order step 3 — Sonder's notes (founder approved 2026-09-27,
 // "fully private" 2026-09-28). The server only ever sees the last 40
@@ -73,7 +74,7 @@ export async function maybeUpdateSonderNotes(messages: ChatMessage[]): Promise<v
     const res = await fetch(`${API_BASE_URL}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: stored.notes, turns }),
+      body: JSON.stringify({ notes: stored.notes, turns, userGender: await currentUserGender() }),
     });
     if (!res.ok) throw new Error(`server responded ${res.status}`);
     const data = (await res.json()) as { notes?: unknown };

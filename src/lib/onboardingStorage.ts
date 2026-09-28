@@ -89,3 +89,16 @@ export async function loadOnboardingState(): Promise<OnboardingState> {
 export function persistOnboardingState(state: OnboardingState): void {
   AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
 }
+
+// The user's own answer to "What's your gender?" (setup.tsx's
+// USER_GENDER_OPTIONS: blue = Male, magenta = Female, violet = Not
+// specified). Sent with every message so Sonder uses it from the start
+// (founder, 2026-09-28: "no need to be coy about it").
+export type UserGender = "female" | "male";
+
+export async function currentUserGender(): Promise<UserGender | undefined> {
+  const { userColor } = await loadOnboardingState();
+  if (userColor === "magenta") return "female";
+  if (userColor === "blue") return "male";
+  return undefined;
+}
