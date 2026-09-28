@@ -250,6 +250,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // Typing on an older page makes no sense — tapping to write takes you to
   // the latest page first.
   const lastPageRows = pages[lastIndex].length;
+  // Founder, 2026-09-28: a long message ran past the page (and out of view)
+  // with no way to see it. The writing box now stops at the page's last
+  // ruled line and scrolls inside itself, so the line being written always
+  // stays in sight.
+  const inputMaxLines = Math.max(2, linesPerPage - lastPageRows);
 
   // --- Keyboard: slide the book up so the line being written sits just
   // above the keyboard, instead of squeezing the page.
@@ -262,10 +267,10 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       return;
     }
     const writingBottom =
-      BOOK_MARGIN + PAD_TOP + (lastPageRows + inputLines) * LINE + LINE / 2;
+      BOOK_MARGIN + PAD_TOP + (lastPageRows + Math.min(inputLines, inputMaxLines)) * LINE + LINE / 2;
     const y = Math.max(0, writingBottom - visibleHeight);
     tiltRef.current?.scrollTo({ y, animated: true });
-  }, [keyboardOpen, visibleHeight, lastPageRows, inputLines]);
+  }, [keyboardOpen, visibleHeight, lastPageRows, inputLines, inputMaxLines]);
 
   const renderRow = (row: DiaryRow, i: number) => {
     if (row.kind === "date") {
@@ -315,7 +320,12 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
               <View>
                 <TextInput
                   ref={inputRef}
-                  style={[styles.input, styles.userText, { color: userInk(paper) }]}
+                  style={[
+                    styles.input,
+                    styles.userText,
+                    { color: userInk(paper), maxHeight: inputMaxLines * LINE },
+                  ]}
+                  scrollEnabled
                   value={input}
                   onChangeText={onChangeInput}
                   onContentSizeChange={(e) =>
