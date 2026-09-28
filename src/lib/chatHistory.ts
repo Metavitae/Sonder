@@ -5,7 +5,12 @@ import type { ChatMessage } from "./useSonderChat";
 // not a backend user-context store: no accounts/auth exist yet (item 3),
 // so there's no real user identity to key a backend row on. Migrate to a
 // backend store once accounts land, per the founder's own call on this.
-const STORAGE_KEY = "sonder_chat_history_v1";
+// Founder, 2026-09-28: the old pre-diary chat kept carrying into the diary.
+// v2 starts the diary blank; the v1 chat is deleted once on first load.
+// (Android auto-backup is also off now — app.json allowBackup — so a
+// reinstall can't bring it back either.)
+const STORAGE_KEY = "sonder_chat_history_v2";
+const OLD_STORAGE_KEYS = ["sonder_chat_history_v1"];
 
 // The server already caps what it sends to Groq to the last 40 items
 // (MAX_HISTORY_TURNS in index.ts) — this cap is only about bounding
@@ -43,6 +48,7 @@ function stripLeakedTags(text: string): string {
 
 export async function loadStoredMessages(): Promise<ChatMessage[]> {
   try {
+    AsyncStorage.multiRemove(OLD_STORAGE_KEYS).catch(() => {});
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);

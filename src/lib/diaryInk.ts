@@ -21,9 +21,29 @@ export const SONDER_INK: Record<MistColor, string> = {
   magenta: "#A01E6A",
 };
 
+// Founder, 2026-09-27: the brown page should be darker, like recycled
+// paper. On that darker page the white-paper inks lose contrast, so brown
+// gets its own, deeper set (same feeling colors, just more ink).
+export const SONDER_INK_ON_BROWN: Record<MistColor, string> = {
+  violet: "#43257D",
+  blue: "#153A7A",
+  cyan: "#07505E",
+  amber: "#6B3C00",
+  magenta: "#78124E",
+};
+
+export function sonderInk(color: MistColor, paper: Paper): string {
+  return paper === "brown" ? SONDER_INK_ON_BROWN[color] : SONDER_INK[color];
+}
+
 export const USER_INK = "#2B231C";
+export const USER_INK_ON_BROWN = "#1F170F";
+
+export function userInk(paper: Paper): string {
+  return paper === "brown" ? USER_INK_ON_BROWN : USER_INK;
+}
 
 export const PAPER_STYLE: Record<Paper, { page: string; rule: string; faint: string }> = {
   white: { page: "#FAF7F0", rule: "rgba(70,100,150,0.20)", faint: "rgba(43,35,28,0.45)" },
-  brown: { page: "#D8C19A", rule: "rgba(95,62,28,0.26)", faint: "rgba(58,38,18,0.55)" },
+  brown: { page: "#B39B78", rule: "rgba(62,40,18,0.30)", faint: "rgba(31,23,15,0.6)" },
 };

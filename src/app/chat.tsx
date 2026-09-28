@@ -33,7 +33,7 @@ import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDis
 import { DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
-import { PAPER_STYLE, SONDER_FONT, SONDER_INK } from "../lib/diaryInk";
+import { PAPER_STYLE, SONDER_FONT, sonderInk } from "../lib/diaryInk";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -358,7 +358,7 @@ export default function ChatScreen() {
         {showDisclosure && (
           <Animated.View style={[styles.disclosureWrap, disclosureStyle]}>
             <Pressable onPress={dismissDisclosure} hitSlop={24}>
-              <Text style={[styles.disclosureText, { color: SONDER_INK[color] }]}>
+              <Text style={[styles.disclosureText, { color: sonderInk(color, paper) }]}>
                 {t(
                   "This is a private page. Sonder — not a person — may write back.",
                   "Esta es una página privada. Sonder —no una persona— puede escribirte."

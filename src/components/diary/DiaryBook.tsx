@@ -19,7 +19,7 @@ import {
   paginate,
   type Paper,
 } from "../../lib/diaryLayout";
-import { PAPER_STYLE, SONDER_FONT, SONDER_INK, USER_FONT, USER_INK } from "../../lib/diaryInk";
+import { PAPER_STYLE, SONDER_FONT, SONDER_INK, USER_FONT, sonderInk, userInk } from "../../lib/diaryInk";
 import type { MistColor } from "../../lib/mistAtlas";
 import { t } from "../../lib/i18n";
 
@@ -197,7 +197,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         </Text>
       );
     }
-    const color = row.role === "sonder" ? SONDER_INK[row.ink ?? feeling] : USER_INK;
+    const color = row.role === "sonder" ? sonderInk(row.ink ?? feeling, paper) : userInk(paper);
     return (
       <Text
         key={i}
@@ -237,7 +237,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
               <View>
                 <TextInput
                   ref={inputRef}
-                  style={[styles.input, styles.userText, { color: USER_INK }]}
+                  style={[styles.input, styles.userText, { color: userInk(paper) }]}
                   value={input}
                   onChangeText={onChangeInput}
                   onContentSizeChange={(e) =>
@@ -248,7 +248,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                   returnKeyType="send"
                   onSubmitEditing={onSend}
                   autoFocus
-                  cursorColor={USER_INK}
+                  cursorColor={userInk(paper)}
                   selectionColor="rgba(43,35,28,0.25)"
                   accessibilityLabel={t("Write in the diary", "Escribe en el diario")}
                 />
@@ -260,7 +260,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                     accessibilityRole="button"
                     accessibilityLabel={t("Send", "Enviar")}
                   >
-                    <Text style={[styles.sendText, { color: SONDER_INK[feeling] }]}>↵</Text>
+                    <Text style={[styles.sendText, { color: sonderInk(feeling, paper) }]}>↵</Text>
                   </Pressable>
                 )}
               </View>
@@ -342,8 +342,10 @@ const styles = StyleSheet.create({
   rule: { position: "absolute", left: 0, right: 0, height: 1 },
   writing: { paddingTop: PAD_TOP, paddingHorizontal: PAD_X },
   row: { height: LINE, lineHeight: LINE, fontSize: FONT_SIZE, includeFontPadding: false },
-  sonderText: { fontFamily: SONDER_FONT, fontSize: FONT_SIZE },
-  userText: { fontFamily: USER_FONT, fontSize: FONT_SIZE },
+  // Founder, 2026-09-28: Sonder's writing and the user's must look really
+  // apart — Sonder writes small, the user writes big, same ruled line.
+  sonderText: { fontFamily: SONDER_FONT, fontSize: 15 },
+  userText: { fontFamily: USER_FONT, fontSize: 21 },
   dateText: { fontSize: 13, fontStyle: "italic", letterSpacing: 0.3 },
   pending: { opacity: 0.55 },
   dream: { fontStyle: "italic", opacity: 0.75 },
