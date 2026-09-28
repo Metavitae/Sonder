@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -65,6 +65,7 @@ export default function SetupScreen() {
 
   const handleBirthdateChange = useCallback(
     (date: Date, adult: boolean) => {
+      Keyboard.dismiss();
       setBirthdate(date.toISOString().slice(0, 10));
       setIsAdult(adult);
     },
@@ -110,7 +111,16 @@ export default function SetupScreen() {
     // unreachable. This version's fix is to actually shrink the spacing
     // (title margins, inter-row gaps) to fit — not to reintroduce scrolling.
     <View style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
-      <View style={styles.content}>
+      <View
+        style={styles.content}
+        // Touching anywhere that isn't the email field closes the keyboard
+        // (the field and buttons claim their own touches, so this only hears
+        // the rest; returning false leaves the touch free for the wheel).
+        onStartShouldSetResponder={() => {
+          Keyboard.dismiss();
+          return false;
+        }}
+      >
         <Text style={styles.title}>{t("What's your email?", "¿Cuál es tu correo?")}</Text>
         <TextInput
           style={styles.emailInput}
@@ -122,6 +132,10 @@ export default function SetupScreen() {
           autoCorrect={false}
           keyboardType="email-address"
           textContentType="emailAddress"
+          // Founder, 2026-09-28: once the email is in, the keyboard goes
+          // away — Done closes it, and so does touching anything else.
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
         />
         {state.email !== null && state.email.length > 0 && !emailValid && (
           <Text style={styles.gateText}>{t("That doesn't look like a valid email yet.", "Ese correo todavía no parece válido.")}</Text>
@@ -135,7 +149,10 @@ export default function SetupScreen() {
         <FogGemPicker
           options={USER_GENDER_OPTIONS}
           selected={state.userColor}
-          onSelect={(color: MistColor) => setUserColor(color)}
+          onSelect={(color: MistColor) => {
+            Keyboard.dismiss();
+            setUserColor(color);
+          }}
           idPrefix="user"
         />
 
@@ -143,7 +160,10 @@ export default function SetupScreen() {
         <FogGemPicker
           options={SONDER_GENDER_OPTIONS}
           selected={state.sonderColor}
-          onSelect={(color: MistColor) => setSonderColor(color)}
+          onSelect={(color: MistColor) => {
+            Keyboard.dismiss();
+            setSonderColor(color);
+          }}
           idPrefix="sonder"
         />
       </View>
