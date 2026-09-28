@@ -513,7 +513,11 @@ const NOTE_KEEPING_INSTRUCTION =
   "who they are), what's going on for them and how it turned out, things " +
   "they're looking forward to or dreading, what they love and dislike, how " +
   "they like to be treated, and anything you promised to remember or ask " +
-  "about. Update or drop what's no longer true.\n\n" +
+  "about — and always keep any promise you made (\"I'll ask how Monday " +
+  "went\"). Update or drop what's no longer true.\n\n" +
+  "Never assume their gender — not from their name or anything else. Write " +
+  "about them without pronouns (\"Has a cat named Mole\") unless they've " +
+  "said which they use.\n\n" +
   "Rules: plain short lines, one fact per line, starting with \"- \". Warm " +
   "and factual, never clinical — no diagnoses or labels. Only what they " +
   "actually said or clearly showed; never guess. Nothing about Kithe as a " +
