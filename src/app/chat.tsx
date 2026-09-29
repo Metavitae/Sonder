@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Keyboard,
@@ -90,7 +90,20 @@ export default function ChatScreen() {
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
-  const { color, intensity } = moodToMist(mood);
+  const { color: moodColor, intensity } = moodToMist(mood);
+  // Founder, 2026-09-29: the mist has to go along with Sonder's ink. The
+  // mood resets to neutral (violet) each time the app opens, while every
+  // line keeps the ink of the feeling it was written with — so after a
+  // reopen the glow and the latest ink disagreed. The mist now takes the
+  // color of Sonder's latest line; each new reply carries its own.
+  const lastInk = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "sonder" && m.ink) return m.ink;
+    }
+    return undefined;
+  }, [messages]);
+  const color = lastInk ?? moodColor;
   const insets = useSafeAreaInsets();
   const keyboardSpace = useKeyboardSpace();
   const revealStatusBar = useAutoHideStatusBar();
