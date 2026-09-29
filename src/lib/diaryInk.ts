@@ -13,23 +13,27 @@ export const SONDER_FONT = "serif";
 export const USER_FONT: string | undefined = undefined; // system sans
 
 // Deep enough to read on both papers, still clearly the mist's color.
+// Founder, 2026-09-29: new, more distinct palette (see
+// scripts/generate-mist-atlas.js) — violet key = silver, blue = sky blue,
+// cyan = green, amber = gold, magenta = red. Keys unchanged: saved lines
+// store them.
 export const SONDER_INK: Record<MistColor, string> = {
-  violet: "#5B3A9E",
-  blue: "#1F4FA0",
-  cyan: "#0B7285",
-  amber: "#9A5700",
-  magenta: "#A01E6A",
+  violet: "#4A5468",
+  blue: "#0A62B8",
+  cyan: "#0E7A33",
+  amber: "#8F6A00",
+  magenta: "#B81C18",
 };
 
 // Founder, 2026-09-27: the brown page should be darker, like recycled
 // paper. On that darker page the white-paper inks lose contrast, so brown
 // gets its own, deeper set (same feeling colors, just more ink).
 export const SONDER_INK_ON_BROWN: Record<MistColor, string> = {
-  violet: "#43257D",
-  blue: "#153A7A",
-  cyan: "#07505E",
-  amber: "#6B3C00",
-  magenta: "#78124E",
+  violet: "#2F3747",
+  blue: "#084785",
+  cyan: "#0A5222",
+  amber: "#5A3F00",
+  magenta: "#8A0F0C",
 };
 
 export function sonderInk(color: MistColor, paper: Paper): string {

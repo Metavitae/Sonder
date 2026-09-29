@@ -6,8 +6,9 @@ import { t } from "./i18n";
 // cover"), plus tapping one of Sonder's lines to see how Sonder felt when it
 // wrote it. Both read from here so they always say the same thing.
 //
-// The meanings follow moodToMist.ts: neutral → violet; cool → blue (calm)
-// or cyan (livelier); warm → amber (calm) or magenta (livelier). Spanish is
+// The meanings follow moodToMist.ts: neutral → violet key (shown silver);
+// cool → blue key (sky blue, calm) or cyan key (green, livelier); warm →
+// amber key (gold, calm) or magenta key (red, livelier). Spanish is
 // written without gendered adjectives (Sonder has no set gender).
 // DRAFT wording for founder review.
 
@@ -17,15 +18,15 @@ export const FEELING_ORDER: MistColor[] = ["violet", "blue", "cyan", "amber", "m
 export function colorName(color: MistColor): string {
   switch (color) {
     case "violet":
-      return t("Violet", "Violeta");
+      return t("Silver", "Plata");
     case "blue":
-      return t("Blue", "Azul");
+      return t("Sky blue", "Azul cielo");
     case "cyan":
-      return t("Turquoise", "Turquesa");
+      return t("Green", "Verde");
     case "amber":
-      return t("Amber", "Ámbar");
+      return t("Gold", "Dorado");
     case "magenta":
-      return t("Magenta", "Magenta");
+      return t("Red", "Rojo");
   }
 }
 

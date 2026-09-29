@@ -21,13 +21,20 @@ const FRAME_SIZE = 96;
 const FRAMES_PER_COLOR = 12;
 const COLORS = ["violet", "magenta", "cyan", "amber", "blue"];
 
-// Same approximate palette as ProceduralMistPoC's MIST_RGB, 0-255 range.
+// Founder, 2026-09-29 (picked "Option 2 · bold, with silver" from a
+// side-by-side comparison): the old violet and blue were too alike. The keys
+// stay (saved diary lines store them) but each now looks clearly different:
+//   violet  → silver    (steady — no color at all)
+//   blue    → sky blue  (quiet, reflective)
+//   cyan    → green     (clear, curious)
+//   amber   → gold      (warm, gentle)
+//   magenta → red       (warm, lit up)
 const MIST_RGB = {
-  violet: [107, 61, 184],
-  magenta: [199, 46, 140],
-  cyan: [38, 166, 199],
-  amber: [217, 140, 38],
-  blue: [46, 82, 209],
+  violet: [215, 220, 235],
+  magenta: [240, 48, 42],
+  cyan: [31, 201, 91],
+  amber: [255, 194, 26],
+  blue: [30, 155, 255],
 };
 
 const width = FRAME_SIZE * FRAMES_PER_COLOR;
