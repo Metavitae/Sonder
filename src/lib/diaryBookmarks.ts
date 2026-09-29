@@ -32,6 +32,7 @@ export function useDiaryBookmarks(): {
   bookmarks: Bookmark[];
   addBookmark: (b: Bookmark) => void;
   removeBookmarks: (ids: string[]) => void;
+  entryDeleted: (index: number) => void;
 } {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
@@ -60,5 +61,18 @@ export function useDiaryBookmarks(): {
     setBookmarks((prev) => save(prev.filter((p) => !ids.includes(bookmarkId(p)))));
   }, []);
 
-  return { bookmarks, addBookmark, removeBookmarks };
+  // An entry torn out of the diary: its ribbons go with it, and ribbons on
+  // later entries follow their writing down one place (entryKey is the
+  // entry's position in the diary).
+  const entryDeleted = useCallback((index: number) => {
+    setBookmarks((prev) =>
+      save(
+        prev
+          .filter((p) => Number(p.entryKey) !== index)
+          .map((p) => (Number(p.entryKey) > index ? { ...p, entryKey: String(Number(p.entryKey) - 1) } : p))
+      )
+    );
+  }, []);
+
+  return { bookmarks, addBookmark, removeBookmarks, entryDeleted };
 }

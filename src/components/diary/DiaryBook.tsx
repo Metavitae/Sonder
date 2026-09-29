@@ -74,6 +74,8 @@ type Props = {
   bookmarks: Bookmark[];
   onAddBookmark: (b: Bookmark) => void;
   onRemoveBookmarks: (ids: string[]) => void;
+  // Press and hold an entry to tear it out (the screen asks first).
+  onDeleteEntry: (entryKey: string) => void;
 };
 
 function lineStyle(role: "user" | "sonder") {
@@ -96,6 +98,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     bookmarks,
     onAddBookmark,
     onRemoveBookmarks,
+    onDeleteEntry,
   },
   ref
 ) {
@@ -247,8 +250,28 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     }
   }, [lastIndex, ready, setIndex, pageWidth]);
 
+  // Real bug (on the POCO, 2026-09-28): after a photo, Sonder's reply spilled
+  // onto a new page and the book stopped halfway between two pages — the
+  // page-turn animation got cut off by the pages being re-cut mid-turn.
+  // Once things have settled, a book left between pages is set down
+  // squarely on the page it was heading for (never while a finger is on it).
+  const offsetRef = useRef(0);
+  const draggingRef = useRef(false);
+  const settle = useCallback(() => {
+    if (draggingRef.current) return;
+    const target = indexRef.current * pageWidth;
+    if (Math.abs(offsetRef.current - target) > 1) {
+      listRef.current?.scrollToOffset({ offset: target, animated: false });
+    }
+  }, [pageWidth]);
+  useEffect(() => {
+    const id = setTimeout(settle, 700);
+    return () => clearTimeout(id);
+  }, [pages, settle]);
+
   const handleMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      draggingRef.current = false;
       setIndex(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
     },
     [pageWidth, setIndex]
@@ -287,7 +310,10 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // line, or what fits above the keyboard (keeping one line of what came
   // before in view) — and scrolls inside itself past that.
   const pageLinesLeft = linesPerPage - lastPageRows;
-  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 1 : pageLinesLeft;
+  // Two lines of safety below the writing: tested on the POCO (2026-09-28),
+  // the last ~2 lines still ended up under the keyboard without them —
+  // the keyboard's reported top edge isn't exact on every phone.
+  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 3 : pageLinesLeft;
   const inputMaxLines = Math.max(2, Math.min(pageLinesLeft, fitLines));
   useEffect(() => {
     if (!keyboardOpen) {
@@ -304,11 +330,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     if (row.kind === "photo") {
       // Tucked onto the page like a snapshot, a little crooked, never cut.
       return (
-        <View key={i} style={styles.photoRow}>
+        <Pressable key={i} style={styles.photoRow} onLongPress={() => onDeleteEntry(row.entryKey)}>
           <View style={styles.photoFrame}>
             <Image source={{ uri: row.uri }} style={styles.photo} contentFit="cover" />
           </View>
-        </View>
+        </Pressable>
       );
     }
     if (row.kind === "date") {
@@ -330,6 +356,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           row.tone === "dream" && styles.dream,
         ]}
         numberOfLines={1}
+        onLongPress={row.tone ? undefined : () => onDeleteEntry(row.entryKey)}
       >
         {row.text}
       </Text>
@@ -467,6 +494,16 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
             initialScrollIndex={lastIndex}
             onMomentumScrollEnd={handleMomentumEnd}
+            onScroll={(e) => {
+              offsetRef.current = e.nativeEvent.contentOffset.x;
+            }}
+            scrollEventThrottle={32}
+            onScrollBeginDrag={() => {
+              draggingRef.current = true;
+            }}
+            onMomentumScrollBegin={() => {
+              draggingRef.current = true;
+            }}
             keyboardShouldPersistTaps="handled"
             extraData={[input, feeling, paper, lastIndex, bookmarksByPage]}
             style={{ height: bookHeight }}

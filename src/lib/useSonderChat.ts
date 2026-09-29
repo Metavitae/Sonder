@@ -12,6 +12,7 @@ import { currentSonderNotes, maybeUpdateSonderNotes } from "./sonderNotes";
 import type { Presence } from "./motion";
 import type { TraitSignal, TraitWeights } from "./characterTraits";
 import { noteUserMessageLanguage, say } from "./i18n";
+import { forgetDiaryPhoto } from "./diaryPhotos";
 
 // Set by the founder once the Render service exists — see server/README.md.
 // EXPO_PUBLIC_ vars are inlined at bundle time (Expo convention), so this
@@ -401,5 +402,16 @@ export function useSonderChat(onVoiceOn?: () => void) {
     });
   }, [replyTo]);
 
-  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, historyLoaded };
+  // Founder, 2026-09-28: entries can be torn out of the diary — writing or
+  // a photo (whose file is deleted from the phone as well).
+  const deleteMessage = useCallback((index: number) => {
+    setMessages((prev) => {
+      const gone = prev[index];
+      if (!gone) return prev;
+      if (gone.photo) forgetDiaryPhoto(gone.photo.uri);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, historyLoaded };
 }

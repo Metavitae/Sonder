@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -47,6 +48,9 @@ const DREAM_INTENSITY = 0.1;
 const DREAM_OVERLAY_OPACITY = 0.45;
 const WAKE_LINE_DURATION_MS = 2500;
 const TOP_BAR = 44;
+// Founder, 2026-09-28: the back-to-the-latest-page button sat too close to
+// the bottom edge of the phone — lifted well clear of it.
+const JUMP_BUTTON_LIFT = 110;
 
 // Diary reframe (2026-09-27 instructions, item 4): the one-time disclosure
 // fades in over the blank page, holds long enough to read, then fades away
@@ -80,7 +84,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, historyLoaded } =
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, historyLoaded } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -93,7 +97,7 @@ export default function ChatScreen() {
   const { paper, setPaper } = useDiaryPaper();
   // The user's ribbons (founder, 2026-09-28): for the user to remember,
   // so Sonder never places, sees or colors them.
-  const { bookmarks, addBookmark, removeBookmarks } = useDiaryBookmarks();
+  const { bookmarks, addBookmark, removeBookmarks, entryDeleted } = useDiaryBookmarks();
   const [ribbonsOpen, setRibbonsOpen] = useState(false);
   const sortedBookmarks = [...bookmarks].sort(
     (a, b) => Number(a.entryKey) - Number(b.entryKey) || a.lineIdx - b.lineIdx
@@ -284,16 +288,17 @@ export default function ChatScreen() {
     send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
     // Sending always brings the conversation back to the bottom.
     jumpToLatest();
-    // Keep the cursor live in the field after sending, rather than making
-    // the user tap back in every time — pressing the Send button (as
-    // opposed to the keyboard's own submit key) blurs the input by default.
-    inputRef.current?.focus();
+    // Founder, 2026-09-28: "If Sonder is writing/talking we don't need to
+    // see the keyboard." It closes on send and stays closed while Sonder
+    // answers; tapping the page brings it back to write again.
+    Keyboard.dismiss();
   };
 
   // Photos (founder, 2026-09-27/28): paste one onto the page — taken now or
   // picked from the gallery. See diaryPhotos.ts for where it's kept.
   const addPhotoFrom = async (source: "camera" | "library") => {
     noteActivity();
+    Keyboard.dismiss();
     try {
       const photo = await pickDiaryPhoto(source);
       if (!photo) return;
@@ -303,6 +308,30 @@ export default function ChatScreen() {
       console.log("[photo] add failed", err instanceof Error ? err.message : String(err));
     }
   };
+  // Founder, 2026-09-28: tearing an entry out — press and hold it, then
+  // confirm. Writing or a photo; a photo is deleted from the phone too.
+  const confirmDelete = (entryKey: string) => {
+    const index = Number(entryKey);
+    const entry = messages[index];
+    if (!entry || isWaiting) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Alert.alert(
+      entry.photo ? t("Remove this photo?", "¿Quitar esta foto?") : t("Tear out this entry?", "¿Arrancar esta entrada?"),
+      t("It will be gone from the diary for good.", "Se borrará del diario para siempre."),
+      [
+        { text: t("Cancel", "Cancelar"), style: "cancel" },
+        {
+          text: t("Delete", "Borrar"),
+          style: "destructive",
+          onPress: () => {
+            deleteMessage(index);
+            entryDeleted(index);
+          },
+        },
+      ]
+    );
+  };
+
   const handleAddPhoto = () => {
     if (isWaiting) return;
     Alert.alert(t("Add a photo", "Pegar una foto"), undefined, [
@@ -417,6 +446,7 @@ export default function ChatScreen() {
           bookmarks={bookmarks}
           onAddBookmark={addBookmark}
           onRemoveBookmarks={removeBookmarks}
+          onDeleteEntry={confirmDelete}
         />
         {ribbonsOpen && (
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setRibbonsOpen(false)}>
@@ -466,7 +496,7 @@ export default function ChatScreen() {
         )}
         {!atLatest && (
           <Pressable
-            style={styles.jumpButton}
+            style={[styles.jumpButton, { bottom: insets.bottom + JUMP_BUTTON_LIFT }]}
             onPress={jumpToLatest}
             accessibilityRole="button"
             accessibilityLabel={t("Go to the latest page", "Ir a la página más reciente")}
@@ -576,7 +606,6 @@ const styles = StyleSheet.create({
   jumpButton: {
     position: "absolute",
     right: 28,
-    bottom: 28,
     width: 44,
     height: 44,
     borderRadius: 22,

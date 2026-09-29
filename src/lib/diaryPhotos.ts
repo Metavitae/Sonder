@@ -49,6 +49,16 @@ export async function pickDiaryPhoto(source: "camera" | "library"): Promise<Diar
   return { uri: kept.uri, base64: saved.base64 };
 }
 
+// A photo torn out of the diary is deleted from the phone too.
+export function forgetDiaryPhoto(uri: string): void {
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    // Already gone — nothing to do.
+  }
+}
+
 // Sonder's one look at the photo.
 export async function describeDiaryPhoto(base64: string): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/photo`, {

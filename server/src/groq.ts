@@ -586,7 +586,8 @@ const PHOTO_DESCRIPTION_INSTRUCTION = (spanish: boolean) =>
   "what or who is there, the place, the moment and its feeling, and any " +
   "words visible in it. Describe people by what they're doing and how they " +
   "seem, never guess who they are, their age, or anything sensitive about " +
-  "them. No preamble, just the note. " +
+  "them. Describe the photo itself (\"A photo of…\" / \"Una foto de…\"), " +
+  "never who pasted it or that it was pasted. No preamble, just the note. " +
   (spanish ? "Write it in natural Mexican Spanish." : "Write it in English.");
 
 export async function describePhoto(jpegBase64: string, spanish: boolean): Promise<string> {
