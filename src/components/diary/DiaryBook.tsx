@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -31,10 +32,10 @@ import {
   RIBBON_RED,
   SONDER_FONT,
   SONDER_INK,
-  USER_FONT,
   sonderInk,
   userInk,
 } from "../../lib/diaryInk";
+import { HAND_STYLE, type Hand } from "../../lib/diaryHand";
 import { colorName, FEELING_ORDER, feelingNote, feelingWords } from "../../lib/feelingWords";
 import { type Bookmark, bookmarkId } from "../../lib/diaryBookmarks";
 import type { MistColor } from "../../lib/mistAtlas";
@@ -79,10 +80,12 @@ type Props = {
   onRemoveBookmarks: (ids: string[]) => void;
   // Press and hold an entry to tear it out (the screen asks first).
   onDeleteEntry: (entryKey: string) => void;
+  // The user's handwriting, their pick (diaryHand.ts).
+  hand: Hand;
 };
 
-function lineStyle(role: "user" | "sonder") {
-  return role === "sonder" ? styles.sonderText : styles.userText;
+function lineStyle(role: "user" | "sonder", userHand: TextStyle) {
+  return role === "sonder" ? styles.sonderText : userHand;
 }
 
 export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
@@ -102,9 +105,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     onAddBookmark,
     onRemoveBookmarks,
     onDeleteEntry,
+    hand,
   },
   ref
 ) {
+  const userText = HAND_STYLE[hand];
   const textWidth = pageWidth - BOOK_MARGIN * 2 - PAD_X * 2;
   const pageHeight = bookHeight - BOOK_MARGIN * 2;
   const linesPerPage = Math.max(8, Math.floor((pageHeight - PAD_TOP - PAD_BOTTOM) / LINE));
@@ -115,9 +120,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // once. Pages are only drawn once everything stored has been measured.
   const measuredRef = useRef(new Map<string, string[]>());
   const [measureTick, setMeasureTick] = useState(0);
-  const widthRef = useRef(textWidth);
-  if (widthRef.current !== textWidth) {
-    widthRef.current = textWidth;
+  // A new width or a new handwriting re-measures everything.
+  const layoutKey = `${textWidth}:${hand}`;
+  const layoutKeyRef = useRef(layoutKey);
+  if (layoutKeyRef.current !== layoutKey) {
+    layoutKeyRef.current = layoutKey;
     measuredRef.current = new Map();
   }
   // Photos take a fixed number of lines — nothing to measure.
@@ -146,7 +153,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     // two handwritings mean. It's page 0, drawn by renderKeyPage, no rows.
     return [[], ...cut];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, linesPerPage, measureTick]);
+  }, [entries, linesPerPage, measureTick, hand]);
   const lastIndex = pages.length - 1;
 
   // --- Bookmarks: a ribbon marks the writing, not the page number, so on
@@ -366,7 +373,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("My handwriting is small, like this.", "Mi letra es pequeña, así.")}
       </Text>
-      <Text style={[styles.keyLine, styles.userText, { color: userInk(paper) }]}>
+      <Text style={[styles.keyLine, userText, { color: userInk(paper) }]}>
         {t("Yours is big, like this.", "La tuya es grande, así.")}
       </Text>
       <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
@@ -399,7 +406,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         key={i}
         style={[
           styles.row,
-          lineStyle(row.role),
+          lineStyle(row.role, userText),
           { color },
           row.tone === "pending" && styles.pending,
           row.tone === "dream" && styles.dream,
@@ -437,7 +444,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                   ref={inputRef}
                   style={[
                     styles.input,
-                    styles.userText,
+                    userText,
                     { color: userInk(paper), maxHeight: inputMaxLines * LINE },
                   ]}
                   scrollEnabled
@@ -500,7 +507,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       }
       <View style={[styles.measure, { width: textWidth - INPUT_PAD_RIGHT }]} pointerEvents="none">
         <Text
-          style={[styles.measureText, styles.userText]}
+          style={[styles.measureText, userText]}
           onTextLayout={(ev) => setInputLines(Math.max(1, ev.nativeEvent.lines.length))}
         >
           {input.length > 0 ? input : " "}
@@ -512,7 +519,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           return (
             <Text
               key={key}
-              style={[styles.measureText, lineStyle(e.role)]}
+              style={[styles.measureText, lineStyle(e.role, userText)]}
               onTextLayout={(ev) =>
                 recordLines(
                   key,
@@ -607,7 +614,6 @@ const styles = StyleSheet.create({
   // Founder, 2026-09-28: Sonder's writing and the user's must look really
   // apart — Sonder writes small, the user writes big, same ruled line.
   sonderText: { fontFamily: SONDER_FONT, fontSize: 15 },
-  userText: { fontFamily: USER_FONT, fontSize: 21 },
   dateText: { fontSize: 13, fontStyle: "italic", letterSpacing: 0.3 },
   pending: { opacity: 0.55 },
   dream: { fontStyle: "italic", opacity: 0.75 },

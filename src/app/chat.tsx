@@ -35,6 +35,7 @@ import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDis
 import { BOOK_MARGIN, DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
+import { HAND_STYLE, useDiaryHand } from "../lib/diaryHand";
 import { PAPER_STYLE, RIBBON_RED, SONDER_FONT, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
@@ -97,6 +98,7 @@ export default function ChatScreen() {
   const inputRef = useRef<TextInput>(null);
   const bookRef = useRef<DiaryBookHandle>(null);
   const { paper, setPaper } = useDiaryPaper();
+  const { hand, setHand } = useDiaryHand();
   // The user's ribbons (founder, 2026-09-28): for the user to remember,
   // so Sonder never places, sees or colors them.
   const { bookmarks, addBookmark, removeBookmarks, entryDeleted } = useDiaryBookmarks();
@@ -386,6 +388,26 @@ export default function ChatScreen() {
               ]}
             />
           ))}
+          {
+            // Founder decision 2026-09-29: the user's own handwriting,
+            // Caveat or Kalam — each button written in its own hand.
+          }
+          {(["kalam", "caveat"] as const).map((h) => (
+            <Pressable
+              key={h}
+              onPress={() => setHand(h)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                h === "kalam"
+                  ? t("Write in Kalam handwriting", "Escribir con letra Kalam")
+                  : t("Write in Caveat handwriting", "Escribir con letra Caveat")
+              }
+              style={[styles.handSwatch, hand === h && styles.handSwatchActive]}
+            >
+              <Text style={[styles.handSwatchText, { fontFamily: HAND_STYLE[h].fontFamily }]}>Aa</Text>
+            </Pressable>
+          ))}
         </View>
         {
           // Autumn/Troy pills removed per founder (2026-09-14 instructions,
@@ -449,6 +471,7 @@ export default function ChatScreen() {
           onAddBookmark={addBookmark}
           onRemoveBookmarks={removeBookmarks}
           onDeleteEntry={confirmDelete}
+          hand={hand}
         />
         {ribbonsOpen && (
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setRibbonsOpen(false)}>
@@ -523,7 +546,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     zIndex: 10,
   },
-  paperPicker: { flexDirection: "row", gap: 10 },
+  paperPicker: { flexDirection: "row", alignItems: "center", gap: 10 },
   photoButton: { marginLeft: "auto", marginRight: 18, paddingVertical: 4 },
   // A tiny snapshot: a white-bordered square with a dot of sun in it.
   photoIcon: {
@@ -578,6 +601,17 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.35)",
   },
   paperSwatchActive: { borderWidth: 2, borderColor: "#FFFFFF" },
+  handSwatch: {
+    height: 26,
+    paddingHorizontal: 6,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handSwatchActive: { borderWidth: 2, borderColor: "#FFFFFF" },
+  handSwatchText: { color: "#F0E6FF", fontSize: 16, lineHeight: 20, includeFontPadding: false },
   disclosureWrap: {
     position: "absolute",
     left: 48,

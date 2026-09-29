@@ -65,6 +65,15 @@
       "expo-video",
       "expo-asset",
       [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/caveat/400Regular/Caveat_400Regular.ttf",
+            "./node_modules/@expo-google-fonts/kalam/400Regular/Kalam_400Regular.ttf"
+          ]
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
