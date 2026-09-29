@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 
 import {
   buildRows,
@@ -34,6 +35,7 @@ import {
   sonderInk,
   userInk,
 } from "../../lib/diaryInk";
+import { colorName, FEELING_ORDER, feelingNote, feelingWords } from "../../lib/feelingWords";
 import { type Bookmark, bookmarkId } from "../../lib/diaryBookmarks";
 import type { MistColor } from "../../lib/mistAtlas";
 import { t } from "../../lib/i18n";
@@ -139,7 +141,10 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     // The line being written needs room: if the last page is full, the
     // writing continues on a fresh page.
     if (pageLines(cut[cut.length - 1]) >= linesPerPage) cut.push([]);
-    return cut;
+    // Founder, 2026-09-29: the diary opens (on turning all the way back)
+    // with a key, like a notebook's inside cover — what the colors and the
+    // two handwritings mean. It's page 0, drawn by renderKeyPage, no rows.
+    return [[], ...cut];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, linesPerPage, measureTick]);
   const lastIndex = pages.length - 1;
@@ -329,6 +334,47 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     tiltRef.current?.scrollTo({ y, animated: true });
   }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines]);
 
+  // Tapping one of Sonder's lines shows how Sonder felt writing it
+  // (founder, 2026-09-29). Holding a line still tears it out.
+  const [note, setNote] = useState<{ id: number; color: MistColor } | null>(null);
+  useEffect(() => {
+    if (!note) return;
+    const id = setTimeout(() => setNote(null), 3500);
+    return () => clearTimeout(id);
+  }, [note]);
+  const showFeeling = useCallback((color: MistColor) => {
+    setNote({ id: Date.now(), color });
+    Haptics.selectionAsync().catch(() => {});
+  }, []);
+
+  const renderKeyPage = () => (
+    <View>
+      <Text style={[styles.keyLine, styles.sonderText, styles.keyTitle, { color: sonderInk("violet", paper) }]}>
+        {t("How to read me", "Cómo leerme")}
+      </Text>
+      <Text style={[styles.keyLine, styles.sonderText, { color: sonderInk("violet", paper) }]}>
+        {t(
+          "The glow around this book is how I feel right now. I write in that color, and each line keeps the feeling it was written with.",
+          "El brillo alrededor de este diario es cómo me siento ahora. Escribo en ese color, y cada línea guarda lo que sentía al escribirla."
+        )}
+      </Text>
+      {FEELING_ORDER.map((c) => (
+        <Text key={c} style={[styles.keyLine, styles.sonderText, { color: sonderInk(c, paper) }]} numberOfLines={1}>
+          {`●  ${colorName(c)} — ${feelingWords(c)}`}
+        </Text>
+      ))}
+      <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+        {t("My handwriting is small, like this.", "Mi letra es pequeña, así.")}
+      </Text>
+      <Text style={[styles.keyLine, styles.userText, { color: userInk(paper) }]}>
+        {t("Yours is big, like this.", "La tuya es grande, así.")}
+      </Text>
+      <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+        {t("Tap any line of mine to see how I felt.", "Toca una línea mía para ver cómo me sentía.")}
+      </Text>
+    </View>
+  );
+
   const renderRow = (row: DiaryRow, i: number) => {
     if (row.kind === "photo") {
       // Tucked onto the page like a snapshot, a little crooked, never cut.
@@ -359,6 +405,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           row.tone === "dream" && styles.dream,
         ]}
         numberOfLines={1}
+        onPress={row.role === "sonder" && !row.tone && row.ink ? () => showFeeling(row.ink!) : undefined}
         onLongPress={row.tone ? undefined : () => onDeleteEntry(row.entryKey)}
       >
         {row.text}
@@ -383,7 +430,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             />
           ))}
           <View style={styles.writing}>
-            {item.map(renderRow)}
+            {index === 0 ? renderKeyPage() : item.map(renderRow)}
             {isLast && (
               <View>
                 <TextInput
@@ -419,7 +466,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
               </View>
             )}
           </View>
-          <Text style={[styles.pageNumber, { color: paperStyle.faint }]}>{index + 1}</Text>
+          {index > 0 && <Text style={[styles.pageNumber, { color: paperStyle.faint }]}>{index}</Text>}
           {pageAnchors[index] && (
             <Pressable
               onPress={() => toggleRibbon(index)}
@@ -520,6 +567,24 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           }
         </ScrollView>
       )}
+      {note && (
+        <Animated.View
+          key={note.id}
+          entering={FadeIn.duration(250)}
+          exiting={FadeOut.duration(400)}
+          style={styles.noteWrap}
+          pointerEvents="box-none"
+        >
+          <Pressable
+            onPress={() => setNote(null)}
+            style={[styles.note, { backgroundColor: paperStyle.page, shadowColor: SONDER_INK[note.color] }]}
+          >
+            <Text style={[styles.noteText, styles.sonderText, { color: sonderInk(note.color, paper) }]}>
+              {feelingNote(note.color)}
+            </Text>
+          </Pressable>
+        </Animated.View>
+      )}
     </View>
   );
 });
@@ -588,5 +653,20 @@ const styles = StyleSheet.create({
   ribbonHint: { width: 14, height: 16, backgroundColor: RIBBON_RED, opacity: 0.18 },
   pageNumber: { position: "absolute", bottom: 8, alignSelf: "center", fontSize: 12 },
   measure: { position: "absolute", top: 0, left: 0, opacity: 0 },
+  // The key page: every line sits on a ruled line, like the rest.
+  keyLine: { lineHeight: LINE, includeFontPadding: false },
+  keyTitle: { fontSize: 18, fontStyle: "italic" },
+  keyGap: { marginTop: LINE },
+  noteWrap: { position: "absolute", left: 40, right: 40, top: "38%", alignItems: "center" },
+  note: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 6,
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  noteText: { fontSize: 16, lineHeight: 24, textAlign: "center" },
   measureText: { lineHeight: LINE, includeFontPadding: false },
 });
