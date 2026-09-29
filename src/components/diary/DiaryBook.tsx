@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   FlatList,
+  Keyboard,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -11,14 +12,17 @@ import {
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 
 import {
   buildRows,
   type DiaryEntry,
   type DiaryRow,
   measureKey,
+  pageLines,
   paginate,
   type Paper,
+  PHOTO_LINES,
 } from "../../lib/diaryLayout";
 import {
   PAPER_STYLE,
@@ -40,6 +44,8 @@ const FONT_SIZE = 18;
 const PAD_TOP = 34;
 const PAD_BOTTOM = 30;
 const PAD_X = 22;
+// Room on the right of the line being written for the send arrow.
+const INPUT_PAD_RIGHT = 30;
 // Space between the book and the screen edge — where the mist (Sonder's
 // feelings) shows around the notebook.
 export const BOOK_MARGIN = 16;
@@ -108,14 +114,15 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     widthRef.current = textWidth;
     measuredRef.current = new Map();
   }
-  const unmeasured = entries.filter((e) => !measuredRef.current.has(measureKey(e)));
+  // Photos take a fixed number of lines — nothing to measure.
+  const unmeasured = entries.filter((e) => !e.photoUri && !measuredRef.current.has(measureKey(e)));
   const recordLines = useCallback((key: string, lines: string[]) => {
     if (measuredRef.current.has(key)) return;
     measuredRef.current.set(key, lines.length > 0 ? lines : [""]);
     setMeasureTick((n) => n + 1);
   }, []);
   const storedAllMeasured = entries.every(
-    (e) => e.tone !== undefined || measuredRef.current.has(measureKey(e))
+    (e) => e.tone !== undefined || !!e.photoUri || measuredRef.current.has(measureKey(e))
   );
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -127,7 +134,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     const cut = paginate(rows, linesPerPage);
     // The line being written needs room: if the last page is full, the
     // writing continues on a fresh page.
-    if (cut[cut.length - 1].length >= linesPerPage) cut.push([]);
+    if (pageLines(cut[cut.length - 1]) >= linesPerPage) cut.push([]);
     return cut;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, linesPerPage, measureTick]);
@@ -146,7 +153,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         if (!anchor) {
           const words = page
             .slice(r)
-            .filter((x) => x.kind === "line" && !x.tone)
+            .filter((x): x is Extract<DiaryRow, { kind: "line" }> => x.kind === "line" && !x.tone)
             .slice(0, 2)
             .map((x) => x.text)
             .join(" ");
@@ -249,18 +256,39 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
 
   // Typing on an older page makes no sense — tapping to write takes you to
   // the latest page first.
-  const lastPageRows = pages[lastIndex].length;
-  // Founder, 2026-09-28: a long message ran past the page (and out of view)
-  // with no way to see it. The writing box now stops at the page's last
-  // ruled line and scrolls inside itself, so the line being written always
-  // stays in sight.
-  const inputMaxLines = Math.max(2, linesPerPage - lastPageRows);
-
+  const lastPageRows = pageLines(pages[lastIndex]);
   // --- Keyboard: slide the book up so the line being written sits just
   // above the keyboard, instead of squeezing the page.
   const tiltRef = useRef<ScrollView>(null);
+  const rootRef = useRef<View>(null);
   const [visibleHeight, setVisibleHeight] = useState(bookHeight);
   const [inputLines, setInputLines] = useState(1);
+  // Founder, 2026-09-28 (tested on the POCO): a long message kept growing
+  // behind the keyboard. The space left for writing is now measured
+  // directly — from the top of the book to the keyboard's top edge — and
+  // the line count comes from an invisible copy of the text (below), not
+  // the input's own size reports.
+  const [keyboard, setKeyboard] = useState<{ top: number; height: number } | null>(null);
+  const [bookTop, setBookTop] = useState<number | null>(null);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboard({ top: e.endCoordinates.screenY, height: e.endCoordinates.height });
+      rootRef.current?.measureInWindow((_x, y) => setBookTop(y));
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(null));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const spaceAboveKeyboard =
+    keyboard && bookTop !== null ? Math.min(visibleHeight, keyboard.top - bookTop) : visibleHeight;
+  // The writing box stops at whichever comes first — the page's last ruled
+  // line, or what fits above the keyboard (keeping one line of what came
+  // before in view) — and scrolls inside itself past that.
+  const pageLinesLeft = linesPerPage - lastPageRows;
+  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 1 : pageLinesLeft;
+  const inputMaxLines = Math.max(2, Math.min(pageLinesLeft, fitLines));
   useEffect(() => {
     if (!keyboardOpen) {
       tiltRef.current?.scrollTo({ y: 0, animated: true });
@@ -268,11 +296,21 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     }
     const writingBottom =
       BOOK_MARGIN + PAD_TOP + (lastPageRows + Math.min(inputLines, inputMaxLines)) * LINE + LINE / 2;
-    const y = Math.max(0, writingBottom - visibleHeight);
+    const y = Math.max(0, writingBottom - spaceAboveKeyboard);
     tiltRef.current?.scrollTo({ y, animated: true });
-  }, [keyboardOpen, visibleHeight, lastPageRows, inputLines, inputMaxLines]);
+  }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines]);
 
   const renderRow = (row: DiaryRow, i: number) => {
+    if (row.kind === "photo") {
+      // Tucked onto the page like a snapshot, a little crooked, never cut.
+      return (
+        <View key={i} style={styles.photoRow}>
+          <View style={styles.photoFrame}>
+            <Image source={{ uri: row.uri }} style={styles.photo} contentFit="cover" />
+          </View>
+        </View>
+      );
+    }
     if (row.kind === "date") {
       return (
         <Text key={i} style={[styles.row, styles.dateText, { color: paperStyle.faint }]} numberOfLines={1}>
@@ -328,9 +366,6 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                   scrollEnabled
                   value={input}
                   onChangeText={onChangeInput}
-                  onContentSizeChange={(e) =>
-                    setInputLines(Math.max(1, Math.round(e.nativeEvent.contentSize.height / LINE)))
-                  }
                   multiline
                   submitBehavior="submit"
                   returnKeyType="send"
@@ -382,10 +417,18 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   };
 
   return (
-    <View style={styles.flex}>
+    <View ref={rootRef} style={styles.flex}>
       {
         // Invisible measuring pass — same width and type as the page.
       }
+      <View style={[styles.measure, { width: textWidth - INPUT_PAD_RIGHT }]} pointerEvents="none">
+        <Text
+          style={[styles.measureText, styles.userText]}
+          onTextLayout={(ev) => setInputLines(Math.max(1, ev.nativeEvent.lines.length))}
+        >
+          {input.length > 0 ? input : " "}
+        </Text>
+      </View>
       <View style={[styles.measure, { width: textWidth }]} pointerEvents="none">
         {unmeasured.map((e) => {
           const key = measureKey(e);
@@ -430,6 +473,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             windowSize={3}
             initialNumToRender={2}
           />
+          {
+            // Room to slide the book up by, so the line being written can
+            // always reach the space above the keyboard.
+            keyboard && <View style={{ height: keyboard.height }} />
+          }
         </ScrollView>
       )}
     </View>
@@ -462,12 +510,27 @@ const styles = StyleSheet.create({
     minHeight: LINE,
     lineHeight: LINE,
     padding: 0,
-    paddingRight: 30,
+    paddingRight: INPUT_PAD_RIGHT,
     margin: 0,
     textAlignVertical: "top",
     includeFontPadding: false,
   },
   send: { position: "absolute", right: 0, bottom: 2 },
+  photoRow: {
+    height: PHOTO_LINES * LINE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoFrame: {
+    height: PHOTO_LINES * LINE - 12,
+    aspectRatio: 4 / 3,
+    maxWidth: "100%",
+    padding: 6,
+    backgroundColor: "#FBF8F1",
+    transform: [{ rotate: "-1.5deg" }],
+    elevation: 3,
+  },
+  photo: { flex: 1 },
   sendText: { fontSize: 22, fontWeight: "700" },
   // The ribbon hangs from the page's top edge, inside the right margin so
   // it never covers writing. Unmarked pages show only a faint stub to tap.

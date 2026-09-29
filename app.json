@@ -92,7 +92,15 @@
       "expo-local-authentication",
       "expo-secure-store",
       "./plugins/withPhoneAbisOnly.js",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Sonder lets you paste your photos into your diary.",
+          "cameraPermission": "Sonder lets you take a photo to paste into your diary.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

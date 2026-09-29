@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type UserGender, type TraitWeights } from "./groq.js";
+import { describePhoto, generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type UserGender, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -62,7 +62,9 @@ function parseTraitWeights(value: unknown): TraitWeights | undefined {
 }
 
 const app = express();
-app.use(express.json());
+// Room for one shrunk diary photo (~1024 px JPEG, well under 1 MB as
+// base64) on /photo; every other request stays tiny.
+app.use(express.json({ limit: "3mb" }));
 
 const startedAt = Date.now();
 let modelReady = false;
@@ -209,6 +211,24 @@ app.post("/notes", async (req, res) => {
   } catch (err) {
     console.error("[notes] error:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "notes failed" });
+  }
+});
+
+// A photo pasted into the diary: Sonder looks once and gets back a few
+// words to remember it by. The image is neither stored nor logged here.
+const MAX_PHOTO_BASE64_CHARS = 2_500_000;
+app.post("/photo", async (req, res) => {
+  const image = req.body?.image;
+  if (typeof image !== "string" || image.length === 0 || image.length > MAX_PHOTO_BASE64_CHARS) {
+    res.status(400).json({ error: "image (base64 JPEG, under ~1.8 MB) is required" });
+    return;
+  }
+  try {
+    const description = await describePhoto(image, req.body?.spanish === true);
+    res.json({ description });
+  } catch (err) {
+    console.error("[photo] error:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "photo description failed" });
   }
 });
 

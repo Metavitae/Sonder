@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -36,6 +37,7 @@ import { useDiaryPaper } from "../lib/diaryPaper";
 import { PAPER_STYLE, RIBBON_RED, SONDER_FONT, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
+import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -78,7 +80,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, historyLoaded } =
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, historyLoaded } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -248,6 +250,7 @@ export default function ChatScreen() {
     text: m.text,
     at: m.at,
     ink: m.ink,
+    photoUri: m.photo?.uri,
   }));
   if (isWaiting) {
     diaryEntries.push({ key: "pending", role: "sonder", text: coldStartLine ?? "...", tone: "pending" });
@@ -285,6 +288,28 @@ export default function ChatScreen() {
     // the user tap back in every time — pressing the Send button (as
     // opposed to the keyboard's own submit key) blurs the input by default.
     inputRef.current?.focus();
+  };
+
+  // Photos (founder, 2026-09-27/28): paste one onto the page — taken now or
+  // picked from the gallery. See diaryPhotos.ts for where it's kept.
+  const addPhotoFrom = async (source: "camera" | "library") => {
+    noteActivity();
+    try {
+      const photo = await pickDiaryPhoto(source);
+      if (!photo) return;
+      jumpToLatest();
+      await sendPhoto(photo, describeDiaryPhoto, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
+    } catch (err) {
+      console.log("[photo] add failed", err instanceof Error ? err.message : String(err));
+    }
+  };
+  const handleAddPhoto = () => {
+    if (isWaiting) return;
+    Alert.alert(t("Add a photo", "Pegar una foto"), undefined, [
+      { text: t("Take a photo", "Tomar una foto"), onPress: () => addPhotoFrom("camera") },
+      { text: t("From your photos", "De tus fotos"), onPress: () => addPhotoFrom("library") },
+      { text: t("Cancel", "Cancelar"), style: "cancel" },
+    ]);
   };
 
   return (
@@ -336,6 +361,17 @@ export default function ChatScreen() {
           // item 4) — which voice is fixed by onboarding; this only mutes it.
           // Its position is the founder's call (2026-09-26): leave it here.
         }
+        <Pressable
+          onPress={handleAddPhoto}
+          hitSlop={10}
+          style={styles.photoButton}
+          accessibilityRole="button"
+          accessibilityLabel={t("Add a photo", "Pegar una foto")}
+        >
+          <View style={styles.photoIcon}>
+            <View style={styles.photoIconSun} />
+          </View>
+        </Pressable>
         <Pressable
           onPress={() => setRibbonsOpen((o) => !o)}
           hitSlop={10}
@@ -456,7 +492,26 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   paperPicker: { flexDirection: "row", gap: 10 },
-  ribbonButton: { marginLeft: "auto", marginRight: 16, paddingVertical: 4 },
+  photoButton: { marginLeft: "auto", marginRight: 18, paddingVertical: 4 },
+  // A tiny snapshot: a white-bordered square with a dot of sun in it.
+  photoIcon: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: "#F0E6FF",
+    borderRadius: 2,
+    transform: [{ rotate: "-6deg" }],
+  },
+  photoIconSun: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#F0E6FF",
+  },
+  ribbonButton: { marginRight: 16, paddingVertical: 4 },
   ribbonIcon: { width: 12, height: 22, backgroundColor: RIBBON_RED, justifyContent: "flex-end" },
   ribbonIconNotch: {
     width: 0,

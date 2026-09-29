@@ -571,6 +571,43 @@ export async function updateNotes(
   return raw.slice(0, MAX_NOTES_CHARS);
 }
 
+// Photos in the diary (founder, 2026-09-27/28): Sonder looks at each photo
+// once, here, and from then on remembers it only by these few words — the
+// photo itself stays on the phone. Nothing is stored or logged here.
+// Groq's vision model (console.groq.com/docs/vision, checked 2026-09-28).
+const VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
+
+export const MAX_PHOTO_DESCRIPTION_CHARS = 400;
+
+const PHOTO_DESCRIPTION_INSTRUCTION = (spanish: boolean) =>
+  "You are Sonder, the diary this person writes in. They just pasted this " +
+  "photo onto a page. You'll only ever see it this once, so write yourself " +
+  "a short private note of what's in it — two or three plain sentences: " +
+  "what or who is there, the place, the moment and its feeling, and any " +
+  "words visible in it. Describe people by what they're doing and how they " +
+  "seem, never guess who they are, their age, or anything sensitive about " +
+  "them. No preamble, just the note. " +
+  (spanish ? "Write it in natural Mexican Spanish." : "Write it in English.");
+
+export async function describePhoto(jpegBase64: string, spanish: boolean): Promise<string> {
+  const completion = await getClient().chat.completions.create({
+    model: VISION_MODEL,
+    temperature: 0.3,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: PHOTO_DESCRIPTION_INSTRUCTION(spanish) },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${jpegBase64}` } },
+        ],
+      },
+    ],
+  });
+  const raw = (completion.choices[0]?.message?.content ?? "").trim();
+  if (!raw) throw new Error("empty photo description");
+  return raw.slice(0, MAX_PHOTO_DESCRIPTION_CHARS);
+}
+
 // Founder, 2026-09-27: if the user asks about the camera, Sonder tells the
 // truth, plus how and how much of it reaches Kithe as a company. Always in
 // the prompt (they can ask whether or not sight is on right now). Every
@@ -623,7 +660,9 @@ const FIRST_OPENER_INSTRUCTION =
   "short sentences, ending with one light question that's effortless to " +
   "answer — the kind someone can reply to in a few words without thinking. " +
   "Say who you are in a few plain words first — you're their diary, and " +
-  "you write back (e.g. \"I'm your diary. I just happen to write back.\") — " +
+  "you write back (e.g. \"I'm your diary. I just happen to write back.\" / " +
+  "in Spanish \"Soy tu diario… y yo también te contesto.\" — never the " +
+  "literal \"escribo de vuelta\") — " +
   "then the question. No longer explanation than that, no big or deep " +
   "questions yet.";
 

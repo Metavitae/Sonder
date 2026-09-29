@@ -38,7 +38,21 @@ export type ChatMessage = {
   text: string;
   at?: number;
   ink?: MistColor;
+  // A photo pasted onto the page (diaryPhotos.ts): the picture stays on the
+  // phone at `uri`; `description` is what Sonder saw, the only part that
+  // ever travels again.
+  photo?: { uri: string; description?: string };
 };
+
+// What a diary entry says, in words — a photo is shared as what Sonder saw
+// in it, never as the image.
+export function wordsOf(m: ChatMessage): string {
+  if (!m.photo) return m.text;
+  const seen = m.photo.description
+    ? `[Photo pasted into the diary — what it shows: ${m.photo.description}]`
+    : "[Photo pasted into the diary]";
+  return m.text.trim() ? `${seen} ${m.text}` : seen;
+}
 
 // Duplicated from server/src/groq.ts's Warmth/Arousal/Mood — client and
 // server are separate packages with no shared types module, and this is a
@@ -78,7 +92,7 @@ async function requestChat(
   // The server only ever reads the last 40 (MAX_HISTORY_TURNS in
   // server/src/index.ts), and the diary now keeps everything — so only the
   // recent part travels, and only the words.
-  const recent = history.slice(-40).map((m) => ({ role: m.role, text: m.text }));
+  const recent = history.slice(-40).map((m) => ({ role: m.role, text: wordsOf(m) }));
   const body: Record<string, unknown> = { message: text, history: recent, sessionOpening };
   // Per Part 72 — sent every turn, same stateless-per-request shape as
   // headphones/presence below; the server never persists this.
@@ -196,53 +210,28 @@ export function useSonderChat(onVoiceOn?: () => void) {
     maybeUpdateSonderNotes(messages);
   }, [messages]);
 
-  const send = useCallback(async (
+  // The part of a turn after the user's entry is on the page: wait for
+  // Sonder (showing a cold-start line if the server is waking), retry once
+  // on a genuine cold start, then put Sonder's reply on the page.
+  const replyTo = useCallback(async (
     text: string,
-    openingPresence?: Presence,
-    headphonesConnected?: boolean,
-    traitWeights?: TraitWeights,
-    voiceEnabled?: boolean
+    historyForRequest: ChatMessage[],
+    {
+      sessionOpening,
+      openingPresence,
+      headphonesConnected,
+      traitWeights,
+      voiceEnabled,
+      sight,
+    }: {
+      sessionOpening: boolean;
+      openingPresence?: Presence;
+      headphonesConnected?: boolean;
+      traitWeights?: TraitWeights;
+      voiceEnabled?: boolean;
+      sight: string | null;
+    }
   ) => {
-    if (!text.trim()) return;
-    noteUserMessageLanguage(text);
-    setError(null);
-    const sessionOpening = sessionOpeningRef.current;
-    sessionOpeningRef.current = false;
-    // Taken now, once — a cold-start retry below reuses the same words.
-    const sight = takeSightSummary();
-
-    // Per "Kithe - Sonder's Complete Reference" §7 (Crisis Protocol) and
-    // "Sonder - Direct Instructions for CC 2026-08-17 Part 32" — runs
-    // first, on-device, before anything else touches this message: no
-    // network call, no LLM, regardless of tier, permissions, or onboarding
-    // stage. See crisisTripwire.ts for scope/rationale. useSpeakReplies
-    // (chat.tsx) picks this reply up the same way as any other — no extra
-    // wiring needed for it to be spoken, not just displayed.
-    if (isCrisisMessage(text)) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", text, at: Date.now() },
-        sonderEntry(crisisResponseFor(text), undefined),
-      ]);
-      return;
-    }
-
-    // Make sure persisted history has actually finished loading before
-    // capturing it as context below — see loadPromiseRef's comment above.
-    // A no-op after the first send of a session, since the load has
-    // almost always resolved by then; only matters in the narrow window
-    // right after a fresh launch.
-    if (loadPromiseRef.current) {
-      await loadPromiseRef.current;
-    }
-
-    // Captured before the state update below — the server's `history` is
-    // everything BEFORE this turn, and `message` is this turn itself.
-    let historyForRequest: ChatMessage[] = [];
-    setMessages((prev) => {
-      historyForRequest = prev;
-      return [...prev, { role: "user", text, at: Date.now() }];
-    });
     setIsWaiting(true);
     setColdStartLine(null);
     coldStartFiredRef.current = false;
@@ -309,5 +298,108 @@ export function useSonderChat(onVoiceOn?: () => void) {
     }
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, historyLoaded };
+  const send = useCallback(async (
+    text: string,
+    openingPresence?: Presence,
+    headphonesConnected?: boolean,
+    traitWeights?: TraitWeights,
+    voiceEnabled?: boolean
+  ) => {
+    if (!text.trim()) return;
+    noteUserMessageLanguage(text);
+    setError(null);
+    const sessionOpening = sessionOpeningRef.current;
+    sessionOpeningRef.current = false;
+    // Taken now, once — a cold-start retry below reuses the same words.
+    const sight = takeSightSummary();
+
+    // Per "Kithe - Sonder's Complete Reference" §7 (Crisis Protocol) and
+    // "Sonder - Direct Instructions for CC 2026-08-17 Part 32" — runs
+    // first, on-device, before anything else touches this message: no
+    // network call, no LLM, regardless of tier, permissions, or onboarding
+    // stage. See crisisTripwire.ts for scope/rationale. useSpeakReplies
+    // (chat.tsx) picks this reply up the same way as any other — no extra
+    // wiring needed for it to be spoken, not just displayed.
+    if (isCrisisMessage(text)) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", text, at: Date.now() },
+        sonderEntry(crisisResponseFor(text), undefined),
+      ]);
+      return;
+    }
+
+    // Make sure persisted history has actually finished loading before
+    // capturing it as context below — see loadPromiseRef's comment above.
+    // A no-op after the first send of a session, since the load has
+    // almost always resolved by then; only matters in the narrow window
+    // right after a fresh launch.
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current;
+    }
+
+    // Captured before the state update below — the server's `history` is
+    // everything BEFORE this turn, and `message` is this turn itself.
+    let historyForRequest: ChatMessage[] = [];
+    setMessages((prev) => {
+      historyForRequest = prev;
+      return [...prev, { role: "user", text, at: Date.now() }];
+    });
+    await replyTo(text, historyForRequest, {
+      sessionOpening,
+      openingPresence,
+      headphonesConnected,
+      traitWeights,
+      voiceEnabled,
+      sight,
+    });
+  }, [replyTo]);
+
+  // A photo pasted onto the page (diaryPhotos.ts): it goes on the page at
+  // once, then Sonder takes its one look and writes back about it.
+  const sendPhoto = useCallback(async (
+    photo: { uri: string; base64: string },
+    describe: (base64: string) => Promise<string>,
+    openingPresence?: Presence,
+    headphonesConnected?: boolean,
+    traitWeights?: TraitWeights,
+    voiceEnabled?: boolean
+  ) => {
+    setError(null);
+    const sessionOpening = sessionOpeningRef.current;
+    sessionOpeningRef.current = false;
+    const sight = takeSightSummary();
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current;
+    }
+    const at = Date.now();
+    let historyForRequest: ChatMessage[] = [];
+    setMessages((prev) => {
+      historyForRequest = prev;
+      return [...prev, { role: "user", text: "", at, photo: { uri: photo.uri } }];
+    });
+    setIsWaiting(true);
+    let description: string;
+    try {
+      description = await describe(photo.base64);
+    } catch (err) {
+      // The photo stays on the page; Sonder just couldn't see it this time.
+      console.log("[photo] describe failed", err instanceof Error ? err.message : String(err));
+      setIsWaiting(false);
+      setError(say("I couldn't quite see that photo. Want to try again?", "No alcancé a ver bien esa foto. ¿Lo intentamos otra vez?"));
+      return;
+    }
+    const pasted: ChatMessage = { role: "user", text: "", at, photo: { uri: photo.uri, description } };
+    setMessages((prev) => prev.map((m) => (m.at === at && m.photo ? pasted : m)));
+    await replyTo(wordsOf(pasted), historyForRequest, {
+      sessionOpening,
+      openingPresence,
+      headphonesConnected,
+      traitWeights,
+      voiceEnabled,
+      sight,
+    });
+  }, [replyTo]);
+
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, historyLoaded };
 }

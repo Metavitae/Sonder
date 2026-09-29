@@ -23,10 +23,17 @@ export type DiaryEntry = {
   // Transient lines (Sonder thinking, dozing, waking) — drawn like Sonder's
   // writing but never stored.
   tone?: "pending" | "dream";
+  // A photo pasted onto the page (local file on this phone).
+  photoUri?: string;
 };
+
+// A pasted photo takes this many ruled lines of the page, like a snapshot
+// tucked into a pocket notebook.
+export const PHOTO_LINES = 7;
 
 export type DiaryRow =
   | { kind: "date"; text: string }
+  | { kind: "photo"; uri: string; entryKey: string; at?: number }
   | {
       kind: "line";
       role: "user" | "sonder";
@@ -78,6 +85,10 @@ export function buildRows(
         lastDay = day;
       }
     }
+    if (entry.photoUri) {
+      rows.push({ kind: "photo", uri: entry.photoUri, entryKey: entry.key, at: entry.at });
+      continue;
+    }
     const lines = measured.get(measureKey(entry)) ?? [entry.text];
     lines.forEach((text, lineIdx) => {
       rows.push({
@@ -95,20 +106,34 @@ export function buildRows(
   return rows;
 }
 
+// How many ruled lines a row takes up — one, except a photo.
+export function rowLines(row: DiaryRow): number {
+  return row.kind === "photo" ? PHOTO_LINES : 1;
+}
+
+export function pageLines(page: DiaryRow[]): number {
+  return page.reduce((n, row) => n + rowLines(row), 0);
+}
+
 export function paginate(rows: DiaryRow[], linesPerPage: number): DiaryRow[][] {
-  const perPage = Math.max(1, linesPerPage);
+  const perPage = Math.max(PHOTO_LINES, linesPerPage);
   const pages: DiaryRow[][] = [];
   let page: DiaryRow[] = [];
+  let used = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    const size = rowLines(row);
     // A date never sits alone at the foot of a page — it moves over with
     // the writing it introduces, the way you'd start the new day overleaf.
-    const dateWouldBeLast = row.kind === "date" && page.length === perPage - 1;
-    if (page.length >= perPage || (dateWouldBeLast && i < rows.length - 1)) {
+    const dateWouldBeLast = row.kind === "date" && used === perPage - 1;
+    // A photo is never cut in half — if it doesn't fit, it starts the next page.
+    if (used + size > perPage || (dateWouldBeLast && i < rows.length - 1)) {
       pages.push(page);
       page = [];
+      used = 0;
     }
     page.push(row);
+    used += size;
   }
   pages.push(page);
   return pages;

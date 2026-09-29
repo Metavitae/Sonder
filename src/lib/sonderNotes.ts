@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { ChatMessage } from "./useSonderChat";
+import { type ChatMessage, wordsOf } from "./useSonderChat";
 import { currentUserGender } from "./onboardingStorage";
 
 // Diary build order step 3 — Sonder's notes (founder approved 2026-09-27,
@@ -70,7 +70,7 @@ export async function maybeUpdateSonderNotes(messages: ChatMessage[]): Promise<v
     const through = messages.length;
     const turns = messages
       .slice(Math.max(0, through - NOTE_READ_MAX), through)
-      .map((m) => ({ role: m.role, text: m.text }));
+      .map((m) => ({ role: m.role, text: wordsOf(m) }));
     const res = await fetch(`${API_BASE_URL}/notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
