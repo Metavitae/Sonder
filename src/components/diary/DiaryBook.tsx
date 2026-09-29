@@ -79,13 +79,6 @@ type Props = {
   onDeleteEntry: (entryKey: string) => void;
 };
 
-// TEMPORARY (2026-09-29): real keyboard/writing measurements from the phone,
-// read with `adb logcat -s ReactNativeJS`. Remove once the long-message bug
-// is fixed.
-function kbLog(what: string, data?: Record<string, unknown>) {
-  console.log(`[SonderKB] ${what}${data ? " " + JSON.stringify(data) : ""}`);
-}
-
 function lineStyle(role: "user" | "sonder") {
   return role === "sonder" ? styles.sonderText : styles.userText;
 }
@@ -291,35 +284,18 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // --- Keyboard: slide the book up so the line being written sits just
   // above the keyboard, instead of squeezing the page.
   const tiltRef = useRef<ScrollView>(null);
-  const rootRef = useRef<View>(null);
   const [visibleHeight, setVisibleHeight] = useState(bookHeight);
   const [inputLines, setInputLines] = useState(1);
   // Founder, 2026-09-28 (tested on the POCO): a long message kept growing
-  // behind the keyboard. The space left for writing is now measured
-  // directly — from the top of the book to the keyboard's top edge — and
-  // the line count comes from an invisible copy of the text (below), not
+  // behind the keyboard. The space left for writing comes from the
+  // keyboard's own report (see hiddenStrip below), and the line count comes from an invisible copy of the text (below), not
   // the input's own size reports.
   const [keyboard, setKeyboard] = useState<{ top: number; height: number } | null>(null);
-  const [bookTop, setBookTop] = useState<number | null>(null);
   useEffect(() => {
-    kbLog("listener attached");
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKeyboard({ top: e.endCoordinates.screenY, height: e.endCoordinates.height });
-      rootRef.current?.measureInWindow((_x, y) => {
-        setBookTop(y);
-        kbLog("didShow", {
-          screenY: e.endCoordinates.screenY,
-          kbHeight: e.endCoordinates.height,
-          bookTop: y,
-          window: Dimensions.get("window").height,
-          screen: Dimensions.get("screen").height,
-        });
-      });
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", (e) => {
-      kbLog("didHide", { screenY: e?.endCoordinates?.screenY, kbHeight: e?.endCoordinates?.height });
-      setKeyboard(null);
-    });
+    const show = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKeyboard({ top: e.endCoordinates.screenY, height: e.endCoordinates.height })
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(null));
     return () => {
       show.remove();
       hide.remove();
@@ -351,28 +327,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       BOOK_MARGIN + PAD_TOP + (lastPageRows + Math.min(inputLines, inputMaxLines)) * LINE + LINE / 2;
     const y = Math.max(0, writingBottom - spaceAboveKeyboard);
     tiltRef.current?.scrollTo({ y, animated: true });
-    kbLog("tilt", {
-      keyboardOpen,
-      kbTop: keyboard?.top ?? null,
-      bookTop,
-      visibleHeight,
-      hiddenStrip,
-      spaceAboveKeyboard,
-      linesPerPage,
-      lastPageRows,
-      inputLines,
-      inputMaxLines,
-      writingBottom,
-      scrollY: y,
-    });
-    // Where the writing box really ended up, once the slide has finished.
-    const timer = setTimeout(() => {
-      inputRef.current?.measureInWindow((_x, top, _w, h) =>
-        kbLog("input on screen", { top, height: h, bottom: top + h, kbTop: keyboard?.top ?? null })
-      );
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines, keyboard, bookTop, visibleHeight, hiddenStrip]);
+  }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines]);
 
   const renderRow = (row: DiaryRow, i: number) => {
     if (row.kind === "photo") {
@@ -492,7 +447,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   };
 
   return (
-    <View ref={rootRef} style={styles.flex}>
+    <View style={styles.flex}>
       {
         // Invisible measuring pass — same width and type as the page.
       }
