@@ -1,3 +1,53 @@
+diff --git a/node_modules/react-native-mediapipe/android/src/main/java/com/reactnativemediapipe/facelandmarkdetection/FaceLandmarkDetectorHelper.kt b/node_modules/react-native-mediapipe/android/src/main/java/com/reactnativemediapipe/facelandmarkdetection/FaceLandmarkDetectorHelper.kt
+index cc7bb17..7337c63 100644
+--- a/node_modules/react-native-mediapipe/android/src/main/java/com/reactnativemediapipe/facelandmarkdetection/FaceLandmarkDetectorHelper.kt
++++ b/node_modules/react-native-mediapipe/android/src/main/java/com/reactnativemediapipe/facelandmarkdetection/FaceLandmarkDetectorHelper.kt
+@@ -36,6 +36,12 @@ class FaceLandmarkDetectorHelper(
+   // For this example this needs to be a var so it can be reset on changes.
+   // If the Face Landmarker will not change, a lazy val would be preferable.
+   private var faceLandmarker: FaceLandmarker? = null
++  // Sonder patch (2026-09-29): the camera thread could be inside detectAsync
++  // while the main thread closed the landmarker -> SIGSEGV in
++  // PacketCreator.nativeCreateProto on app close. Frames and closing now
++  // take the same lock, and no frame goes in once closing has started.
++  private val closeLock = Any()
++  @Volatile private var closing = false
+   private var imageRotation = 0
+ 
+   init {
+@@ -43,6 +49,7 @@ class FaceLandmarkDetectorHelper(
+   }
+ 
+   fun clearFaceLandmarker() {
++    synchronized(closeLock) { closing = true }
+     faceLandmarkDetectorListener = null
+     // This is a hack. If we call close directly, we crash. There is a theory
+     // that this is because the object detector is still doing some processing, and that
+@@ -51,8 +58,10 @@ class FaceLandmarkDetectorHelper(
+     Handler(Looper.getMainLooper())
+       .postDelayed(
+         {
+-          faceLandmarker?.close()
+-          faceLandmarker = null
++          synchronized(closeLock) {
++            faceLandmarker?.close()
++            faceLandmarker = null
++          }
+         },
+         100
+       )
+@@ -245,7 +254,10 @@ class FaceLandmarkDetectorHelper(
+   fun detectAsync(mpImage: MPImage, frameTime: Long, imageRotation: Int) {
+     val imageProcessingOptions =
+       ImageProcessingOptions.builder().setRotationDegrees(imageRotation).build()
+-    faceLandmarker?.detectAsync(mpImage, imageProcessingOptions, frameTime)
++    synchronized(closeLock) {
++      if (closing) return
++      faceLandmarker?.detectAsync(mpImage, imageProcessingOptions, frameTime)
++    }
+     // As we're using running mode LIVE_STREAM, the landmark result will
+     // be returned in returnLivestreamResult function
+   }
 diff --git a/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js b/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js
 index 1ea35ed..01f6407 100644
 --- a/node_modules/react-native-mediapipe/lib/commonjs/faceLandmarkDetection/index.js

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, StyleSheet, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { type SharedValue, withTiming } from "react-native-reanimated";
 import { Camera, useCameraDevice, useCameraFormat } from "react-native-vision-camera";
@@ -104,6 +104,16 @@ export function SightSense({ quality }: { quality: SharedValue<number> }) {
     delegate: Delegate.GPU,
   });
 
+  // The camera only looks while Sonder is on screen (2026-09-29): it used to
+  // keep sending frames while the app closed, racing the face tracker's
+  // shutdown (SIGSEGV on close; the native side is fixed in
+  // patches/react-native-mediapipe+0.6.0.patch).
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => setAppActive(state === "active"));
+    return () => sub.remove();
+  }, []);
+
   const device = useCameraDevice("front");
   const format = useCameraFormat(device, [{ videoResolution: { width: 1280, height: 720 } }]);
 
@@ -119,7 +129,7 @@ export function SightSense({ quality }: { quality: SharedValue<number> }) {
         device={device}
         format={format}
         pixelFormat="rgb"
-        isActive={true}
+        isActive={appActive}
         frameProcessor={solution.frameProcessor}
         onLayout={solution.cameraViewLayoutChangeHandler}
         onOutputOrientationChanged={solution.cameraOrientationChangedHandler}
