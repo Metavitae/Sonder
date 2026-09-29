@@ -325,16 +325,22 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       hide.remove();
     };
   }, []);
-  const spaceAboveKeyboard =
-    keyboard && bookTop !== null ? Math.min(visibleHeight, keyboard.top - bookTop) : visibleHeight;
+  // Measured on the POCO, 2026-09-29: the screen is drawn under the
+  // navigation bar, and the keyboard covers that bar too, but the space
+  // chat.tsx makes for the keyboard is its height WITHOUT the bar — so the
+  // bottom ~47pt of the visible book sat behind the keyboard, hiding the
+  // line being written. That strip comes straight from the keyboard event
+  // (screen height − keyboard top − keyboard height), so nothing mixes
+  // coordinate systems.
+  const hiddenStrip = keyboard
+    ? Math.max(0, Dimensions.get("screen").height - keyboard.top - keyboard.height)
+    : 0;
+  const spaceAboveKeyboard = visibleHeight - hiddenStrip;
   // The writing box stops at whichever comes first — the page's last ruled
   // line, or what fits above the keyboard (keeping one line of what came
   // before in view) — and scrolls inside itself past that.
   const pageLinesLeft = linesPerPage - lastPageRows;
-  // Two lines of safety below the writing: tested on the POCO (2026-09-28),
-  // the last ~2 lines still ended up under the keyboard without them —
-  // the keyboard's reported top edge isn't exact on every phone.
-  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 3 : pageLinesLeft;
+  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 1 : pageLinesLeft;
   const inputMaxLines = Math.max(2, Math.min(pageLinesLeft, fitLines));
   useEffect(() => {
     if (!keyboardOpen) {
@@ -350,6 +356,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       kbTop: keyboard?.top ?? null,
       bookTop,
       visibleHeight,
+      hiddenStrip,
       spaceAboveKeyboard,
       linesPerPage,
       lastPageRows,
@@ -365,7 +372,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       );
     }, 600);
     return () => clearTimeout(timer);
-  }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines, keyboard, bookTop, visibleHeight]);
+  }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines, keyboard, bookTop, visibleHeight, hiddenStrip]);
 
   const renderRow = (row: DiaryRow, i: number) => {
     if (row.kind === "photo") {

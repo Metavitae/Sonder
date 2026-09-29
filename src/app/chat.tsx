@@ -32,7 +32,7 @@ import { useCameraPermission } from "react-native-vision-camera";
 import { t } from "../lib/i18n";
 import { useAutoHideStatusBar, useKeyboardSpace } from "../lib/useChatChrome";
 import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDisclosure";
-import { DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
+import { BOOK_MARGIN, DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
 import { PAPER_STYLE, RIBBON_RED, SONDER_FONT, sonderInk, userInk } from "../lib/diaryInk";
@@ -50,7 +50,9 @@ const WAKE_LINE_DURATION_MS = 2500;
 const TOP_BAR = 44;
 // Founder, 2026-09-28: the back-to-the-latest-page button sat too close to
 // the bottom edge of the phone — lifted well clear of it.
-const JUMP_BUTTON_LIFT = 110;
+// Founder, 2026-09-28: the "»" was sitting on the writing. It now lives in
+// the page's empty bottom strip (beside the page number), bottom-right.
+const JUMP_BUTTON_SIZE = 28;
 
 // Diary reframe (2026-09-27 instructions, item 4): the one-time disclosure
 // fades in over the blank page, holds long enough to read, then fades away
@@ -496,11 +498,11 @@ export default function ChatScreen() {
         )}
         {!atLatest && (
           <Pressable
-            style={[styles.jumpButton, { bottom: insets.bottom + JUMP_BUTTON_LIFT }]}
+            style={[styles.jumpButton, { bottom: insets.bottom + BOOK_MARGIN + 1 }]}
             onPress={jumpToLatest}
             accessibilityRole="button"
             accessibilityLabel={t("Go to the latest page", "Ir a la página más reciente")}
-            hitSlop={8}
+            hitSlop={12}
           >
             <Text style={styles.jumpText}>»</Text>
           </Pressable>
@@ -605,13 +607,13 @@ const styles = StyleSheet.create({
   error: { color: "#ff8a8a", padding: 8 },
   jumpButton: {
     position: "absolute",
-    right: 28,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    right: BOOK_MARGIN + 10,
+    width: JUMP_BUTTON_SIZE,
+    height: JUMP_BUTTON_SIZE,
+    borderRadius: JUMP_BUTTON_SIZE / 2,
     backgroundColor: "rgba(0,0,0,0.55)",
     alignItems: "center",
     justifyContent: "center",
   },
-  jumpText: { color: "#F0E6FF", fontSize: 24, fontWeight: "600", lineHeight: 26 },
+  jumpText: { color: "#F0E6FF", fontSize: 18, fontWeight: "600", lineHeight: 20 },
 });
