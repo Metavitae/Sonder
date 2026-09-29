@@ -280,8 +280,13 @@ export function useSonderChat(onVoiceOn?: () => void) {
         );
       }
       if (data.voiceOn) onVoiceOnRef.current?.();
-      setMessages((prev) => [...prev, sonderEntry(data.reply, data.mood)]);
-      if (data.mood) setMood(data.mood);
+      // Founder, 2026-09-29: the mist and Sonder's ink react together, from
+      // the same feeling — a reply without a mood tag is the neutral default
+      // for both, never a new-colored line under an old mist. Past lines
+      // keep the ink they were written with.
+      const feeling = data.mood ?? DEFAULT_MOOD;
+      setMessages((prev) => [...prev, sonderEntry(data.reply, feeling)]);
+      setMood(feeling);
       setTraitSignal(data.traitSignal ?? null);
     } catch (err) {
       // Founder-approved (2026-09-25): a friendly line in the conversation's
@@ -325,8 +330,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
       setMessages((prev) => [
         ...prev,
         { role: "user", text, at: Date.now() },
-        sonderEntry(crisisResponseFor(text), undefined),
+        sonderEntry(crisisResponseFor(text), DEFAULT_MOOD),
       ]);
+      setMood(DEFAULT_MOOD);
       return;
     }
 
