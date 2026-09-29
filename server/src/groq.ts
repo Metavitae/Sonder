@@ -577,7 +577,16 @@ export async function updateNotes(
 // Groq's vision model (console.groq.com/docs/vision, checked 2026-09-28).
 const VISION_MODEL = process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 
-export const MAX_PHOTO_DESCRIPTION_CHARS = 400;
+// Founder, 2026-09-28: descriptions were being chopped mid-sentence at 400.
+// The cap stays as a guard, but is cut at the last full sentence.
+export const MAX_PHOTO_DESCRIPTION_CHARS = 700;
+
+function cutAtSentence(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  const end = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  return end > max / 3 ? head.slice(0, end + 1) : head.replace(/\s+\S*$/, "") + "…";
+}
 
 const PHOTO_DESCRIPTION_INSTRUCTION = (spanish: boolean) =>
   "You are Sonder, the diary this person writes in. They just pasted this " +
@@ -606,7 +615,7 @@ export async function describePhoto(jpegBase64: string, spanish: boolean): Promi
   });
   const raw = (completion.choices[0]?.message?.content ?? "").trim();
   if (!raw) throw new Error("empty photo description");
-  return raw.slice(0, MAX_PHOTO_DESCRIPTION_CHARS);
+  return cutAtSentence(raw, MAX_PHOTO_DESCRIPTION_CHARS);
 }
 
 // Founder, 2026-09-27: if the user asks about the camera, Sonder tells the
@@ -614,10 +623,12 @@ export async function describePhoto(jpegBase64: string, spanish: boolean): Promi
 // the prompt (they can ask whether or not sight is on right now). Every
 // claim here was checked: the phone turns expressions into words and sends
 // no image (src/lib/sightReading.ts, src/components/SightSense.tsx);
-// sonder-server has no database and never logs message content; Groq keeps
-// no inference data by default but may keep technical logs up to 30 days for
-// safety/troubleshooting (console.groq.com/docs/your-data, read 2026-09-27)
-// — UPDATE the Groq sentence if Zero Data Retention gets switched on.
+// sonder-server has no database and never logs message content. Groq Zero
+// Data Retention was switched on by the founder 2026-09-28: with it, Groq
+// keeps no inputs/outputs at all, not even the 30-day abuse/troubleshooting
+// logs — only usage metadata that holds no content
+// (console.groq.com/docs/your-data, re-read 2026-09-29). If ZDR is ever
+// switched off, the 30-day sentence must come back.
 const CAMERA_TRUTH_NOTE =
   "If they ask whether you can see them, about the camera, or what happens " +
   "to what you see, answer plainly and truthfully, in your own voice and " +
@@ -633,23 +644,22 @@ const CAMERA_TRUTH_NOTE =
   "answer that message.\n" +
   "- Kithe (the people who made you) keeps NOTHING: no words, no pictures, no " +
   "logs. Kithe's server reads the message, you answer, and it's gone.\n" +
-  "- The AI service that helps you write (Groq) doesn't keep it either, " +
-  "except that it may hold technical logs for up to 30 days, only for safety " +
-  "and abuse checks. That's the only place anything waits, and it isn't Kithe.\n" +
+  "- The AI service that helps you write (Groq) doesn't keep it either: it " +
+  "reads the message to help you answer and keeps nothing of it, no logs " +
+  "of what was said.\n" +
   "- The diary itself lives only on their phone.\n" +
   "Always cover all of it: yes plus how to turn it off; only expressions, " +
   "the picture stays on the phone; the few words DO leave the phone with " +
-  "their message; Kithe keeps nothing; the AI service's up-to-30-day " +
-  "safety logs. NEVER say that nothing is sent or that nothing leaves the " +
+  "their message; Kithe keeps nothing; the AI service keeps " +
+  "nothing either. NEVER say that nothing is sent or that nothing leaves the " +
   "phone — the few words do, and saying otherwise is a lie. Example of the " +
   "shape (put it in your own words and their language, don't copy it): " +
   "\"Yes, I can see you, because you let me when we set up. You can switch " +
   "it off in Settings > Apps > Sonder > Permissions > Camera. I only notice " +
   "expressions, like a smile or tired eyes. The picture never leaves your " +
   "phone; it turns what it sees into a few words, and those go along with " +
-  "your message so I can answer you. Kithe keeps none of it. The AI service " +
-  "that helps me write may hold technical logs for up to 30 days, only for " +
-  "safety checks. And the diary itself is only kept on your phone.\"";
+  "your message so I can answer you. Kithe keeps none of it, and neither does " +
+  "the AI service that helps me write. And the diary itself is only kept on your phone.\"";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
