@@ -81,7 +81,10 @@ for (let row = 0; row < COLORS.length; row++) {
 
 const outDir = path.join(__dirname, "..", "assets", "mist", "sprites");
 fs.mkdirSync(outDir, { recursive: true });
-const outPath = path.join(outDir, "mist_atlas.png");
+// Renamed 2026-09-29 when the palette changed: phones had the old image
+// cached under the old name and kept showing the old colors. Bump the
+// suffix whenever the colors change again.
+const outPath = path.join(outDir, "mist_atlas_v2.png");
 png.pack().pipe(fs.createWriteStream(outPath)).on("finish", () => {
   console.log(`Wrote ${outPath} (${width}x${height})`);
 });

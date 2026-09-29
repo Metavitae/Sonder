@@ -18,7 +18,7 @@ export type { MistColor };
 // classic CSS/RN sprite-sheet flipbook). The other two evaluated options
 // (ProceduralMistPoC, a Skia shader; VectorMistPoC, Lottie) and the
 // MediaCodec-based AmbientMist crossfade that predated Part 18 are removed.
-// The atlas itself (assets/mist/sprites/mist_atlas.png) is baked once at
+// The atlas itself (assets/mist/sprites/mist_atlas_v2.png) is baked once at
 // build time by scripts/generate-mist-atlas.js. Frame-selection math lives
 // in src/lib/mistAtlas.ts, shared with FogGemSwatch.tsx (the onboarding
 // fog-gem swatches, which need the same atlas math composited through
@@ -56,6 +56,8 @@ export function SpriteMistPoC({
     >
       <Image
         source={MIST_ATLAS_SOURCE}
+        // Bundled with the app — no disk cache, so a new palette always shows.
+        cachePolicy="memory"
         contentFit="fill"
         style={{
           position: "absolute",

@@ -21,7 +21,7 @@ export const MIST_FRAMES_PER_COLOR = framesPerColor;
 export const MIST_COLORS = colors;
 export const MIST_ATLAS_COLS = framesPerColor;
 export const MIST_ATLAS_ROWS = colors.length;
-export const MIST_ATLAS_SOURCE = require("../../assets/mist/sprites/mist_atlas.png");
+export const MIST_ATLAS_SOURCE = require("../../assets/mist/sprites/mist_atlas_v2.png");
 
 const FRAME_MS = 83; // ~12fps, matches the atlas's per-color loop cadence
 
