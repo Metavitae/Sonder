@@ -615,7 +615,10 @@ const styles = StyleSheet.create({
   // apart — Sonder writes small, the user writes big, same ruled line.
   dateText: { fontSize: 13, fontStyle: "italic", letterSpacing: 0.3 },
   pending: { opacity: 0.55 },
-  dream: { fontStyle: "italic", opacity: 0.75 },
+  // No italic (2026-09-29, seen on the POCO): Caveat and Kalam have no
+  // italic face, so Android swapped in its own font — wider than the one
+  // the line was measured in, which cut the dream line short ("lin…").
+  dream: { opacity: 0.6 },
   input: {
     minHeight: LINE,
     lineHeight: LINE,
