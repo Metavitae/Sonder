@@ -111,6 +111,8 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
         intensity={MIST_INTENSITY}
         rim={false}
         spread={MIST_SPREAD}
+        radial
+        electric
         rect={{
           x: (width - ROOT_SIZE) / 2,
           y: (height - ROOT_SIZE) / 2,

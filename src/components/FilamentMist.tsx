@@ -77,6 +77,7 @@ type HazeProps = {
   index: number;
   rect: Rect;
   spread: number;
+  radial: boolean;
   glow: string;
   tick: SharedValue<number>;
   reach: SharedValue<number>;
@@ -85,7 +86,7 @@ type HazeProps = {
   sway: SharedValue<number>;
 };
 
-function HazePool({ index, rect, spread, glow, tick, reach, slide, breath, sway }: HazeProps) {
+function HazePool({ index, rect, spread, radial, glow, tick, reach, slide, breath, sway }: HazeProps) {
   const { x, y, width, height } = rect;
   const phase = index * 2.39;
   const base = (index + 0.5) / HAZE;
@@ -97,8 +98,8 @@ function HazePool({ index, rect, spread, glow, tick, reach, slide, breath, sway 
     let oy = 0;
     let nx = 0;
     let ny = 0;
-    if (spread > 1) {
-      // Around a logo: evenly around the circle, like the wisps.
+    if (radial) {
+      // Radial: evenly around the circle, like the wisps.
       const a = s * Math.PI * 2;
       nx = Math.cos(a);
       ny = Math.sin(a);
@@ -185,6 +186,8 @@ export function FilamentMist({
   rect,
   rim = true,
   spread = 1,
+  radial = false,
+  electric = false,
 }: {
   color: MistColor;
   intensity?: number;
@@ -197,8 +200,13 @@ export function FilamentMist({
   // filaments as one) it also adds more wisps and a wide glow along each
   // wisp, so the mist follows the filaments instead of sitting apart.
   spread?: number;
+  // Wisps radiate evenly all around from the rect's center area instead of
+  // growing off its four sides (founder, 2026-09-30: no rectangles in the
+  // opening or onboarding). Adds more wisps and the glow along them.
+  radial?: boolean;
+  // Jagged, crackling bolts instead of smoky curls (the logo opening).
+  electric?: boolean;
 }) {
-  const radial = spread > 1;
   const strandCount = radial ? STRANDS * 2 : STRANDS;
   const strands = useMemo(() => makeStrands(strandCount), [strandCount]);
 
@@ -233,7 +241,7 @@ export function FilamentMist({
   useFrameCallback((frame) => {
     const dt = (frame.timeSincePreviousFrame ?? 16) / 1000;
     // Electric bolts run on real time, the same crackle for every color.
-    time.value += radial ? dt : dt * speed.value * energy.value * SPEED_BOOST;
+    time.value += electric ? dt : dt * speed.value * energy.value * SPEED_BOOST;
     pending.value += dt;
     if (pending.value >= MIN_FRAME_S) {
       pending.value = 0;
@@ -281,7 +289,7 @@ export function FilamentMist({
       }
       const tx = -ny;
       const ty = nx;
-      if (radial) {
+      if (electric) {
         // Electric (logo opening, founder 2026-09-30: "like electricity",
         // not tentacles): each wisp is a jagged bolt that snaps to a new
         // shape ELECTRIC_RATE times a second, its length flickering, instead
@@ -349,11 +357,11 @@ export function FilamentMist({
       <Group transform={[{ scale: SCALE }]}>
       {/* Background haze, moving with the feeling, dim. */}
       {Array.from({ length: HAZE }, (_, i) => (
-        <HazePool key={i} index={i} rect={rect} spread={spread} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
+        <HazePool key={i} index={i} rect={rect} spread={spread} radial={radial} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
       ))}
-      {/* The glow along the wisps (spread > 1 only): the same paths, very
+      {/* The glow along the wisps (radial only): the same paths, very
           wide and faint under a heavy blur, so the mist follows them. */}
-      {spread > 1 && (
+      {radial && (
         <Group
           layer={
             <Paint>

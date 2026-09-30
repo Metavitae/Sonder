@@ -1,16 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { IntroLogoReveal } from "../../components/onboarding/IntroLogoReveal";
 import { MistFormedText } from "../../components/onboarding/MistFormedText";
 import { useOnboarding } from "../../lib/onboardingContext";
 import { useCompleteOnboardingGate } from "../../lib/onboardingGate";
 
-type Phase = "logo" | "text";
-
 // Step 7 (plan §Build/verification order) — replaces the placeholder.
-// Sequence: logo → circle → shrink → "Hi, I'm Sonder." → real /chat
-// hand-off. Sits on the one continuous mist background already mounted at
+// "Hi, I'm Sonder." → real /chat hand-off. The glowing-sphere logo reveal
+// that used to come first (IntroLogoReveal) is removed (founder,
+// 2026-09-30: no reason for it — the opening already presents the logos). Sits on the one continuous mist background already mounted at
 // onboarding/_layout.tsx — no separate mist instance here.
 //
 // TypingWell (a separate first-message input screen, with its own send/
@@ -18,16 +16,13 @@ type Phase = "logo" | "text";
 // founder direction and later "restored" by the same relay channel under
 // the same misunderstanding (Part 47/49) — the founder's actual, direct
 // correction (2026-08-25) was the opposite of what Part 49 concluded: keep
-// IntroLogoReveal/MistFormedText, drop TypingWell entirely. The user's
+// the intro screen's text, drop TypingWell entirely. The user's
 // first real message now happens in the real chat.tsx window, not a
 // separate onboarding-only input step. TypingWell.tsx itself is deleted —
 // confirmed nothing else referenced it.
 export default function IntroScreen() {
   const { markComplete } = useOnboarding();
   const completeOnboardingGate = useCompleteOnboardingGate();
-  const [phase, setPhase] = useState<Phase>("logo");
-
-  const handleLogoComplete = useCallback(() => setPhase("text"), []);
   const handleTextComplete = useCallback(() => {
     // Hard hand-off — chat.tsx's own component tree is never touched, and
     // the user's actual first message now happens there, not here.
@@ -44,8 +39,7 @@ export default function IntroScreen() {
 
   return (
     <View style={styles.container}>
-      {phase === "logo" && <IntroLogoReveal onComplete={handleLogoComplete} />}
-      {phase === "text" && <MistFormedText onComplete={handleTextComplete} />}
+      <MistFormedText onComplete={handleTextComplete} />
     </View>
   );
 }
