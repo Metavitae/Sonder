@@ -118,11 +118,13 @@ function HazePool({ index, rect, spread, radial, glow, tick, reach, slide, breat
         ox = x; oy = y + height - d; nx = -1; ny = 0;
       }
     }
-    const out = (30 * reach.value + 20 * sway.value * Math.sin(t * 0.3 + phase)) * spread;
+    const out = (30 * reach.value + 20 * sway.value * Math.sin(t * 0.3 + phase)) * (radial ? spread * 0.8 : spread);
     return vec(ox + nx * out - ny * 25 * Math.sin(t * 0.2 + phase), oy + ny * out + nx * 25 * Math.sin(t * 0.2 + phase));
   });
   const radius = useDerivedValue(
-    () => (150 + 40 * index % 60) * spread * (0.7 + 0.3 * reach.value) * (1 + breath.value * 0.6 * Math.sin(tick.value * 0.5 + phase))
+    // Radial (founder, 2026-09-30): the glow never reaches past the rays,
+    // so the pools stay about half a typical ray's length.
+    () => (radial ? 45 * spread : (150 + 40 * index % 60) * spread) * (0.7 + 0.3 * reach.value) * (1 + breath.value * 0.6 * Math.sin(tick.value * 0.5 + phase))
   );
   return (
     <Circle c={center} r={radius}>
@@ -373,7 +375,8 @@ export function FilamentMist({
     electric ? 0.7 + 0.3 * hash(Math.floor(tick.value * ELECTRIC_RATE) * 2.31) : 1
   );
   const coreCenter = vec(x + width / 2, y + height / 2);
-  const coreRadius = Math.min(screenW, screenH) * 0.45;
+  // About a typical ray's length: the glow stays inside the rays.
+  const coreRadius = 80 * spread;
 
   return (
     <Canvas
@@ -410,8 +413,9 @@ export function FilamentMist({
             </Paint>
           }
         >
-          <Path path={outer} color={glow} style="stroke" strokeWidth={70} strokeCap="round" strokeJoin="round" opacity={0.1} />
-          <Path path={middle} color={glow} style="stroke" strokeWidth={36} strokeCap="round" strokeJoin="round" opacity={0.14} />
+          {/* Inner parts only, so the glow ends before the rays' tips. */}
+          <Path path={middle} color={glow} style="stroke" strokeWidth={60} strokeCap="round" strokeJoin="round" opacity={0.1} />
+          <Path path={inner} color={glow} style="stroke" strokeWidth={36} strokeCap="round" strokeJoin="round" opacity={0.14} />
         </Group>
       )}
       {/* The smoky wisps: layered faint strokes, one soft blur over all. */}
