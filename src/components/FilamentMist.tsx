@@ -93,20 +93,29 @@ function HazePool({ index, rect, spread, glow, tick, reach, slide, breath, sway 
     const t = tick.value;
     const perimeter = 2 * (width + height);
     const s = (base + 0.08 * slide.value * Math.sin(t * 0.12 + phase) + 1) % 1;
-    let d = s * perimeter;
     let ox = 0;
     let oy = 0;
     let nx = 0;
     let ny = 0;
-    if (d < width) {
-      ox = x + d; oy = y; nx = 0; ny = -1;
-    } else if ((d -= width) < height) {
-      ox = x + width; oy = y + d; nx = 1; ny = 0;
-    } else if ((d -= height) < width) {
-      ox = x + width - d; oy = y + height; nx = 0; ny = 1;
+    if (spread > 1) {
+      // Around a logo: evenly around the circle, like the wisps.
+      const a = s * Math.PI * 2;
+      nx = Math.cos(a);
+      ny = Math.sin(a);
+      ox = x + width / 2 + nx * width / 2;
+      oy = y + height / 2 + ny * height / 2;
     } else {
-      d -= width;
-      ox = x; oy = y + height - d; nx = -1; ny = 0;
+      let d = s * perimeter;
+      if (d < width) {
+        ox = x + d; oy = y; nx = 0; ny = -1;
+      } else if ((d -= width) < height) {
+        ox = x + width; oy = y + d; nx = 1; ny = 0;
+      } else if ((d -= height) < width) {
+        ox = x + width - d; oy = y + height; nx = 0; ny = 1;
+      } else {
+        d -= width;
+        ox = x; oy = y + height - d; nx = -1; ny = 0;
+      }
     }
     const out = (30 * reach.value + 20 * sway.value * Math.sin(t * 0.3 + phase)) * spread;
     return vec(ox + nx * out - ny * 25 * Math.sin(t * 0.2 + phase), oy + ny * out + nx * 25 * Math.sin(t * 0.2 + phase));
@@ -130,6 +139,19 @@ const MIN_FRAME_S = 1 / 30;
 // Founder, 2026-09-29: everything moved too slowly, so the feelings looked
 // alike. All speeds go up by the same factor, keeping their ratios.
 const SPEED_BOOST = 1.8;
+
+// Electric mode (radial, around a logo): bolt shape changes per second,
+// points per bolt, and how far each kink jumps sideways.
+const ELECTRIC_RATE = 11;
+const ELECTRIC_POINTS = 16;
+const ELECTRIC_JAG = 16;
+
+// Cheap repeatable pseudo-random 0..1 from a number (worklet-safe).
+function hash(n: number): number {
+  "worklet";
+  const v = Math.sin(n) * 43758.5453;
+  return v - Math.floor(v);
+}
 
 // The wisp's color pushed toward white, for the bright core threads.
 function brighten(hex: string, amount: number): string {
@@ -176,7 +198,8 @@ export function FilamentMist({
   // wisp, so the mist follows the filaments instead of sitting apart.
   spread?: number;
 }) {
-  const strandCount = spread > 1 ? Math.round(STRANDS * 1.5) : STRANDS;
+  const radial = spread > 1;
+  const strandCount = radial ? STRANDS * 2 : STRANDS;
   const strands = useMemo(() => makeStrands(strandCount), [strandCount]);
 
   // Each motion quality eases toward the new feeling's over ~1.2 s.
@@ -209,7 +232,8 @@ export function FilamentMist({
   const pending = useSharedValue(0);
   useFrameCallback((frame) => {
     const dt = (frame.timeSincePreviousFrame ?? 16) / 1000;
-    time.value += dt * speed.value * energy.value * SPEED_BOOST;
+    // Electric bolts run on real time, the same crackle for every color.
+    time.value += radial ? dt : dt * speed.value * energy.value * SPEED_BOOST;
     pending.value += dt;
     if (pending.value >= MIN_FRAME_S) {
       pending.value = 0;
@@ -229,23 +253,55 @@ export function FilamentMist({
     for (let i = 0; i < strands.length; i++) {
       const st = strands[i];
       const s = (st.s + 0.04 * slide.value * Math.sin(t * 0.22 + st.phase) + 1) % 1;
-      let d = s * perimeter;
       let ox = 0;
       let oy = 0;
       let nx = 0;
       let ny = 0;
-      if (d < width) {
-        ox = x + d; oy = y; nx = 0; ny = -1;
-      } else if ((d -= width) < height) {
-        ox = x + width; oy = y + d; nx = 1; ny = 0;
-      } else if ((d -= height) < width) {
-        ox = x + width - d; oy = y + height; nx = 0; ny = 1;
+      if (radial) {
+        // Around a logo (founder, 2026-09-30: "all around", not a cross):
+        // roots evenly spaced by angle on the ellipse inside the rect, each
+        // wisp heading straight out from the center.
+        const a = s * Math.PI * 2;
+        nx = Math.cos(a);
+        ny = Math.sin(a);
+        ox = x + width / 2 + nx * width / 2;
+        oy = y + height / 2 + ny * height / 2;
       } else {
-        d -= width;
-        ox = x; oy = y + height - d; nx = -1; ny = 0;
+        let d = s * perimeter;
+        if (d < width) {
+          ox = x + d; oy = y; nx = 0; ny = -1;
+        } else if ((d -= width) < height) {
+          ox = x + width; oy = y + d; nx = 1; ny = 0;
+        } else if ((d -= height) < width) {
+          ox = x + width - d; oy = y + height; nx = 0; ny = 1;
+        } else {
+          d -= width;
+          ox = x; oy = y + height - d; nx = -1; ny = 0;
+        }
       }
       const tx = -ny;
       const ty = nx;
+      if (radial) {
+        // Electric (logo opening, founder 2026-09-30: "like electricity",
+        // not tentacles): each wisp is a jagged bolt that snaps to a new
+        // shape ELECTRIC_RATE times a second, its length flickering, instead
+        // of swelling and curling. The jag is keyed to the point index so
+        // the three layered strokes stay on the same bolt.
+        const step = Math.floor(t * ELECTRIC_RATE);
+        const len = st.length * spread * (0.55 + 0.45 * hash(step * 7.13 + i * 13.7));
+        for (let k = 0; k < ELECTRIC_POINTS; k++) {
+          const u = k / (ELECTRIC_POINTS - 1);
+          if (u > extent) break;
+          const jag = k === 0 ? 0 : (hash(step * 3.31 + i * 17.1 + k * 5.77) - 0.5) * 2 * ELECTRIC_JAG * Math.sqrt(u);
+          const bend = Math.sin(u * 2.2 + st.phase + t * 0.4) * st.sway * 0.6 * u;
+          const out = u * len;
+          const px = ox + nx * out + tx * (jag + bend);
+          const py = oy + ny * out + ty * (jag + bend);
+          if (k === 0) p.moveTo(px, py);
+          else p.lineTo(px, py);
+        }
+        continue;
+      }
       const swell = 1 + breath.value * Math.sin(t * 0.7 + st.phase * 1.3);
       const tremble = fl * 0.15 * Math.sin(t * 9 + st.phase * 5);
       const len = st.length * spread * reach.value * swell * (1 + tremble);

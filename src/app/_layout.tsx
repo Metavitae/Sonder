@@ -69,7 +69,11 @@ export default function RootLayout() {
     setOnboardingComplete(true);
   }, []);
 
-  // replay-onboarding.tsx (test path): same pattern in reverse.
+  // replay-onboarding.tsx (test path): same pattern in reverse. The key
+  // remounts the navigator: found live 2026-09-30, the onboarding screens
+  // finished earlier this session stayed mounted underneath, so a replay
+  // resumed them past the logo opening instead of starting over.
+  const [navKey, setNavKey] = useState(0);
   const justReopenedRef = useRef(false);
   useEffect(() => {
     if (onboardingComplete === false && justReopenedRef.current) {
@@ -79,6 +83,7 @@ export default function RootLayout() {
   }, [onboardingComplete]);
   const reopenOnboardingGate = useCallback(() => {
     justReopenedRef.current = true;
+    setNavKey((k) => k + 1);
     setOnboardingComplete(false);
   }, []);
 
@@ -101,7 +106,7 @@ export default function RootLayout() {
     <OnboardingGateContext.Provider value={completeOnboardingGate}>
       <OnboardingReopenContext.Provider value={reopenOnboardingGate}>
         <SafeAreaProvider>
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack key={navKey} screenOptions={{ headerShown: false }}>
             <Stack.Protected guard={onboardingComplete}>
               <Stack.Screen name="index" />
               <Stack.Screen name="chat" />
