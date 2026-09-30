@@ -21,6 +21,17 @@ export const MIST_FRAMES_PER_COLOR = framesPerColor;
 export const MIST_COLORS = colors;
 export const MIST_ATLAS_COLS = framesPerColor;
 export const MIST_ATLAS_ROWS = colors.length;
+// The five feeling colors as plain colors (same values the atlas generator
+// bakes in, scripts/generate-mist-atlas.js) — for mist drawn live
+// (FilamentMist.tsx) rather than from the image.
+export const MIST_GLOW: Record<MistColor, string> = {
+  violet: "#D7DCEB",
+  magenta: "#F0302A",
+  cyan: "#1FC95B",
+  amber: "#FFC21A",
+  blue: "#1E9BFF",
+};
+
 export const MIST_ATLAS_SOURCE = require("../../assets/mist/sprites/mist_atlas_v2.png");
 
 const FRAME_MS = 83; // ~12fps, matches the atlas's per-color loop cadence

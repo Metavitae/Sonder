@@ -27,6 +27,8 @@ import { useSpeak } from "../lib/speak";
 import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
+import { FilamentMist } from "../components/FilamentMist";
+import { FILAMENT_MIST_ENABLED } from "../lib/featureFlags";
 import { SightSense } from "../components/SightSense";
 import { useCameraPermission } from "react-native-vision-camera";
 import { t } from "../lib/i18n";
@@ -363,6 +365,18 @@ export default function ChatScreen() {
       }
       <View style={styles.blackBackdrop} pointerEvents="none" />
       <SpriteMistPoC color={color} intensity={mistIntensity} />
+      {FILAMENT_MIST_ENABLED && (
+        <FilamentMist
+          color={color}
+          intensity={mistIntensity}
+          rect={{
+            x: BOOK_MARGIN,
+            y: insets.top + TOP_BAR + BOOK_MARGIN,
+            width: windowWidth - BOOK_MARGIN * 2,
+            height: bookHeight - BOOK_MARGIN * 2,
+          }}
+        />
+      )}
       <Animated.View
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.sightOverlay, sightOverlayStyle]}
