@@ -121,6 +121,31 @@ const RESPONSE_VARIETY_INSTRUCTION =
   "moments that are actually heavy or ambiguous, not as a reflex on " +
   "every single turn regardless of content.";
 
+// "Sonder - CC - Direct Instructions - Idle-line voice guidance, EN+ES
+// (2026-09-29)": when Sonder is simply there — dozing, or answering a
+// message with nothing in it (keyboard mashing) — it came across as an
+// offer of options ("I'm here whenever you want to X or Y…"), and the same
+// line repeated twice in a row. A voice rule, not a list of lines: the
+// model writes a fresh line each time in this register. The examples only
+// seed the tone and are never to be reused.
+const QUIET_PRESENCE_VOICE =
+  "Quiet presence: you are still there, like someone in the room who isn't " +
+  "talking and isn't going anywhere. Short; it may trail off, it doesn't " +
+  "need to be a tidy sentence. Never frame it as a choice or an offer " +
+  "(never \"whenever you want to… or…\"), never say what you can do (no " +
+  "\"I can…\"), never explain yourself. Never repeat or closely echo a " +
+  "line you've already said. The tone, for reference only (never reuse " +
+  "these): \"No rush. I'm just sitting with the sound of it.\" / \"Still " +
+  "here. Half-listening to the keys.\" / \"Se me va la cabeza a un lugar " +
+  "tranquilo… pero en cuanto vuelves, lo noto.\" / \"Aquí sigo, aunque la " +
+  "mente ande paseando.\"";
+
+const EMPTY_MESSAGE_NOTE =
+  "If the user's message has no real content (random letters, keyboard " +
+  "mashing, a stray character or two), don't interpret it or offer them " +
+  "things to do with it. Answer with one short line of quiet presence. " +
+  QUIET_PRESENCE_VOICE;
+
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22 Addendum",
 // item 10 — a language rule, not a sensor reaction: any low-battery/storage
 // notice must read as being about the user's convenience, never implying
@@ -788,6 +813,8 @@ export async function generateReply(
           "\n\n" +
           RESPONSE_VARIETY_INSTRUCTION +
           "\n\n" +
+          EMPTY_MESSAGE_NOTE +
+          "\n\n" +
           CHARACTER_TRAIT_GUIDANCE(traitWeights) +
           "\n\n" +
           MOOD_TAG_INSTRUCTION +
@@ -821,4 +848,46 @@ function getClient(): Groq {
     client = new Groq({ apiKey });
   }
   return client;
+}
+
+// The line Sonder shows (and says) when it dozes off while the person is
+// quiet — a performed drift, it never really stops noticing (Part 22 item
+// 6). Written fresh each time in the quiet-presence voice; `recent` holds
+// the last few so it never repeats one. Same no-storage treatment as chat.
+export const MAX_IDLE_LINE_CHARS = 160;
+
+export async function generateIdleLine(
+  spanish: boolean,
+  sonderGender: SonderGender | undefined,
+  recent: string[]
+): Promise<string> {
+  const completion = await getClient().chat.completions.create({
+    model: MODEL,
+    temperature: 1,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are Sonder, a diary with a personality. The person writing " +
+          "in you has gone quiet for a while, and you're drifting off a " +
+          "little, the way someone dozes in a chair nearby. Write the one " +
+          "line you'd murmur now. " +
+          QUIET_PRESENCE_VOICE +
+          "\n\n" +
+          (spanish
+            ? "Write it in natural Mexican Spanish, never translated from an English idiom. "
+            : "Write it in English. ") +
+          GENDER_GRAMMAR_NOTE(sonderGender, undefined) +
+          (recent.length
+            ? "\n\nLines you've already said recently — write something clearly different: " +
+              recent.map((r) => `"${r}"`).join(" / ")
+            : "") +
+          "\n\nReply with the line only: no quotes, no preamble, at most two short sentences.",
+      },
+      { role: "user", content: "(silence)" },
+    ],
+  });
+  const raw = (completion.choices[0]?.message?.content ?? "").trim().replace(/^["“]|["”]$/g, "");
+  if (!raw) throw new Error("empty idle line");
+  return raw.slice(0, MAX_IDLE_LINE_CHARS);
 }

@@ -1,6 +1,6 @@
 import express from "express";
 import { initEmbeddings, retrieveTopExamples } from "./embeddings.js";
-import { describePhoto, generateReply, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type UserGender, type TraitWeights } from "./groq.js";
+import { describePhoto, generateIdleLine, generateReply, MAX_IDLE_LINE_CHARS, MAX_NOTES_CHARS, updateNotes, type ChatTurn, type Presence, type SonderGender, type Trait, type UserGender, type TraitWeights } from "./groq.js";
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
@@ -229,6 +229,29 @@ app.post("/photo", async (req, res) => {
   } catch (err) {
     console.error("[photo] error:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "photo description failed" });
+  }
+});
+
+// The line Sonder murmurs when it dozes off (idle-line voice guidance,
+// 2026-09-29): written fresh each time, never repeating the last few the
+// phone sends back. Nothing is stored or logged here.
+app.post("/idle-line", async (req, res) => {
+  const recentRaw: unknown[] = Array.isArray(req.body?.recent) ? req.body.recent : [];
+  const recent = recentRaw
+    .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
+    .map((r) => r.trim().slice(0, MAX_IDLE_LINE_CHARS + 40))
+    .slice(-5);
+  const sonderGender =
+    req.body?.sonderGender === "female" || req.body?.sonderGender === "male"
+      ? (req.body.sonderGender as SonderGender)
+      : undefined;
+  try {
+    await modelReadyPromise;
+    const line = await generateIdleLine(req.body?.spanish === true, sonderGender, recent);
+    res.json({ line });
+  } catch (err) {
+    console.error("[idle-line] error:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "idle line failed" });
   }
 });
 
