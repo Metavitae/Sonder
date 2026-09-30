@@ -127,6 +127,16 @@ const POINTS = 7;
 // resolution was too heavy). Soft smoke loses nothing visible.
 const SCALE = 0.5;
 const MIN_FRAME_S = 1 / 30;
+// Founder, 2026-09-29: everything moved too slowly, so the feelings looked
+// alike. All speeds go up by the same factor, keeping their ratios.
+const SPEED_BOOST = 1.8;
+
+// The wisp's color pushed toward white, for the bright core threads.
+function brighten(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  return `rgb(${mix((n >> 16) & 255)}, ${mix((n >> 8) & 255)}, ${mix(n & 255)})`;
+}
 
 type Strand = { s: number; length: number; phase: number; wave: number; sway: number };
 
@@ -188,7 +198,7 @@ export function FilamentMist({
   const pending = useSharedValue(0);
   useFrameCallback((frame) => {
     const dt = (frame.timeSincePreviousFrame ?? 16) / 1000;
-    time.value += dt * speed.value * energy.value;
+    time.value += dt * speed.value * energy.value * SPEED_BOOST;
     pending.value += dt;
     if (pending.value >= MIN_FRAME_S) {
       pending.value = 0;
@@ -288,6 +298,10 @@ export function FilamentMist({
         <Path path={middle} color={glow} style="stroke" strokeWidth={8} strokeCap="round" strokeJoin="round" opacity={0.26} />
         <Path path={inner} color={glow} style="stroke" strokeWidth={3} strokeCap="round" strokeJoin="round" opacity={0.6} />
       </Group>
+      {/* Founder, 2026-09-29: slim, brighter cores of light inside the
+          wisps, sharp (outside the blur), on the same paths and motion,
+          ending before the tip so the smoke still trails off past them. */}
+      <Path path={middle} color={brighten(glow, 0.55)} style="stroke" strokeWidth={1.6} strokeCap="round" strokeJoin="round" opacity={0.85} />
       </Group>
     </Canvas>
   );
