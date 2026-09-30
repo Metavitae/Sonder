@@ -84,6 +84,11 @@ type Props = {
   // PROTOTYPE (2026-09-29, filament mist): tapping a color on the key page
   // previews that feeling's mist for a few seconds.
   onPreviewFeeling?: (color: MistColor) => void;
+  // Founder, 2026-09-29: on an earlier page (turned back to, or opened from
+  // a bookmark) the mist shows the feeling of Sonder's last line on that
+  // page — or before it, if Sonder wrote nothing there. Null = the latest
+  // page, where the mist is Sonder's current feeling.
+  onViewedFeelingChange?: (color: MistColor | null) => void;
 };
 
 function lineStyle(role: "user" | "sonder", userHand: TextStyle, sonderHand: TextStyle) {
@@ -109,6 +114,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     onDeleteEntry,
     hand,
     onPreviewFeeling,
+    onViewedFeelingChange,
   },
   ref
 ) {
@@ -159,6 +165,17 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, linesPerPage, measureTick, hand]);
   const lastIndex = pages.length - 1;
+  // Sonder's feeling as of the end of each page: its last line's ink there,
+  // or carried over from before when Sonder wrote nothing on that page.
+  const pageFeelings = useMemo(() => {
+    let last: MistColor | null = null;
+    return pages.map((page) => {
+      for (const row of page) {
+        if (row.kind === "line" && row.role === "sonder" && !row.tone && row.ink) last = row.ink;
+      }
+      return last;
+    });
+  }, [pages]);
 
   // --- Bookmarks: a ribbon marks the writing, not the page number, so on
   // every re-cut each ribbon is found again by the line it anchors to. A
@@ -224,8 +241,9 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         atLatestRef.current = atLatest;
         onLatestChange(atLatest);
       }
+      onViewedFeelingChange?.(atLatest ? null : pageFeelings[i] ?? null);
     },
-    [lastIndex, onLatestChange]
+    [lastIndex, onLatestChange, onViewedFeelingChange, pageFeelings]
   );
   const goToLatest = useCallback(() => {
     listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
@@ -436,7 +454,10 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         <View
           style={[
             styles.page,
-            { backgroundColor: paperStyle.page, shadowColor: SONDER_INK[feeling] },
+            {
+              backgroundColor: paperStyle.page,
+              shadowColor: SONDER_INK[index >= lastIndex ? feeling : pageFeelings[index] ?? feeling],
+            },
           ]}
         >
           {Array.from({ length: linesPerPage }, (_, k) => (

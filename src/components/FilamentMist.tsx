@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { StyleSheet } from "react-native";
+import { useWindowDimensions } from "react-native";
 import { Blur, Canvas, Circle, Group, Paint, Path, RadialGradient, RoundedRect, Skia, vec } from "@shopify/react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import {
@@ -121,8 +121,11 @@ function HazePool({ index, rect, glow, tick, reach, slide, breath, sway }: HazeP
   );
 }
 
-const STRANDS = 34;
-const POINTS = 8;
+const STRANDS = 24;
+const POINTS = 7;
+// Drawn at half resolution and enlarged 2x (measured on the POCO: full
+// resolution was too heavy). Soft smoke loses nothing visible.
+const SCALE = 0.5;
 const MIN_FRAME_S = 1 / 30;
 
 type Strand = { s: number; length: number; phase: number; wave: number; sway: number };
@@ -251,19 +254,26 @@ export function FilamentMist({
 
   const glow = MIST_GLOW[color];
   const r = 6;
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   return (
-    <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Canvas
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: screenW * SCALE,
+        height: screenH * SCALE,
+        transformOrigin: "top left",
+        transform: [{ scale: 1 / SCALE }],
+      }}
+    >
+      <Group transform={[{ scale: SCALE }]}>
       {/* Background haze, moving with the feeling, dim. */}
       {Array.from({ length: HAZE }, (_, i) => (
         <HazePool key={i} index={i} rect={rect} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
       ))}
-      {/* Soft rim hugging the page: concentric faint strokes, no blur. */}
-      <Group opacity={rimOpacity}>
-        <RoundedRect x={x - 10} y={y - 10} width={width + 20} height={height + 20} r={r + 10} color={glow} style="stroke" strokeWidth={14} opacity={0.08} />
-        <RoundedRect x={x - 5} y={y - 5} width={width + 10} height={height + 10} r={r + 5} color={glow} style="stroke" strokeWidth={8} opacity={0.16} />
-        <RoundedRect x={x - 1.5} y={y - 1.5} width={width + 3} height={height + 3} r={r} color={glow} style="stroke" strokeWidth={3} opacity={0.35} />
-      </Group>
       {/* The smoky wisps: layered faint strokes, one soft blur over all. */}
       <Group
         layer={
@@ -272,9 +282,12 @@ export function FilamentMist({
           </Paint>
         }
       >
-        <Path path={outer} color={glow} style="stroke" strokeWidth={16} strokeCap="round" strokeJoin="round" opacity={0.07} />
-        <Path path={middle} color={glow} style="stroke" strokeWidth={8} strokeCap="round" strokeJoin="round" opacity={0.12} />
-        <Path path={inner} color={glow} style="stroke" strokeWidth={3} strokeCap="round" strokeJoin="round" opacity={0.3} />
+        {/* Soft rim hugging the page, blurred with the smoke. */}
+        <RoundedRect x={x - 3} y={y - 3} width={width + 6} height={height + 6} r={r + 3} color={glow} style="stroke" strokeWidth={8} opacity={rimOpacity} />
+        <Path path={outer} color={glow} style="stroke" strokeWidth={16} strokeCap="round" strokeJoin="round" opacity={0.14} />
+        <Path path={middle} color={glow} style="stroke" strokeWidth={8} strokeCap="round" strokeJoin="round" opacity={0.26} />
+        <Path path={inner} color={glow} style="stroke" strokeWidth={3} strokeCap="round" strokeJoin="round" opacity={0.6} />
+      </Group>
       </Group>
     </Canvas>
   );

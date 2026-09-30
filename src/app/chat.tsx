@@ -106,6 +106,9 @@ export default function ChatScreen() {
   // mist by tapping its color on the key page. Mist only, never the ink;
   // back to Sonder's real feeling after 8 s.
   const [previewColor, setPreviewColor] = useState<MistColor | null>(null);
+  // The feeling of the earlier page being read (null on the latest page).
+  const [pageFeeling, setPageFeeling] = useState<MistColor | null>(null);
+  const mistColor = previewColor ?? pageFeeling ?? color;
   useEffect(() => {
     if (!previewColor) return;
     const id = setTimeout(() => setPreviewColor(null), 8000);
@@ -379,10 +382,10 @@ export default function ChatScreen() {
         // background haze (founder: as expressive as the filaments, and
         // less bright), so the old image mist is only the fallback.
       }
-      {!FILAMENT_MIST_ENABLED && <SpriteMistPoC color={color} intensity={mistIntensity} />}
+      {!FILAMENT_MIST_ENABLED && <SpriteMistPoC color={mistColor} intensity={mistIntensity} />}
       {FILAMENT_MIST_ENABLED && (
         <FilamentMist
-          color={previewColor ?? color}
+          color={mistColor}
           intensity={mistIntensity}
           rect={{
             x: BOOK_MARGIN,
@@ -511,6 +514,7 @@ export default function ChatScreen() {
           onDeleteEntry={confirmDelete}
           hand={hand}
           onPreviewFeeling={FILAMENT_MIST_ENABLED ? setPreviewColor : undefined}
+          onViewedFeelingChange={setPageFeeling}
         />
         {ribbonsOpen && (
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setRibbonsOpen(false)}>
