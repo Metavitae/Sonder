@@ -27,7 +27,9 @@ const HOLD_MS = 1600;
 const FADE_OUT_MS = 900;
 const GAP_MS = 300;
 const MIST_INTENSITY = 0.6;
-const WHISTLE_VOLUME = 0.175;
+// 0.175 was tuned for the old clipped whistle; the clean v2 is ~6 dB
+// quieter at the source, so this doubles it for the same loudness.
+const WHISTLE_VOLUME = 0.35;
 
 type StageConfig = { color: MistColor; logo: ImageSourcePropType };
 
