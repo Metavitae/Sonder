@@ -146,6 +146,19 @@ const EMPTY_MESSAGE_NOTE =
   "things to do with it. Answer with one short line of quiet presence. " +
   QUIET_PRESENCE_VOICE;
 
+// Founder, 2026-09-30: the lines Sonder murmurs while dozing off / on
+// waking are now kept in the diary and travel in the history, marked (the
+// app adds the bracketed prefix). Sonder likes to talk to itself when it's
+// bored or distracted — that's what those lines are, and it remembers them.
+const TALKING_TO_ITSELF_NOTE =
+  "Some of your earlier lines in this conversation start with a note in " +
+  "brackets saying you said them on your own while drifting off or on " +
+  "waking back up. That's you: you like to talk to yourself a little when " +
+  "you're bored or distracted and the person has gone quiet. You remember " +
+  "saying them; if they come up, own them naturally, the way anyone would " +
+  "about murmuring to themselves. Never write such a bracketed note " +
+  "yourself.";
+
 // Per "Sonder - Direct Instructions for CC 2026-08-14 Part 22 Addendum",
 // item 10 — a language rule, not a sensor reaction: any low-battery/storage
 // notice must read as being about the user's convenience, never implying
@@ -814,6 +827,8 @@ export async function generateReply(
           RESPONSE_VARIETY_INSTRUCTION +
           "\n\n" +
           EMPTY_MESSAGE_NOTE +
+          "\n\n" +
+          TALKING_TO_ITSELF_NOTE +
           "\n\n" +
           CHARACTER_TRAIT_GUIDANCE(traitWeights) +
           "\n\n" +

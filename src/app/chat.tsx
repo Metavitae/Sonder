@@ -49,7 +49,6 @@ import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
 // dimming, rather than teaching SpriteMistPoC itself about sleep.
 const DREAM_INTENSITY = 0.1;
 const DREAM_OVERLAY_OPACITY = 0.45;
-const WAKE_LINE_DURATION_MS = 2500;
 const TOP_BAR = 44;
 // Founder, 2026-09-28: the back-to-the-latest-page button sat too close to
 // the bottom edge of the phone — lifted well clear of it.
@@ -89,7 +88,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, historyLoaded } =
+  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -147,19 +146,18 @@ export default function ChatScreen() {
   // as real interaction (resets the idle clock, and if we were dreaming,
   // flags a genuine wake rather than just cancelling a near-miss).
   const { isDreaming, justWoke, noteActivity, clearJustWoke } = useIdleSleep();
-  const [dreamLine, setDreamLine] = useState("");
-  const [wakeLine, setWakeLine] = useState<string | null>(null);
   const dreamOverlay = useSharedValue(0);
 
   useEffect(() => {
     let cancelled = false;
     if (isDreaming) {
-      setDreamLine("");
       // Written fresh by the server each time (idle-line voice guidance,
       // 2026-09-29), falling back to a local line when offline.
       fetchDreamLine().then((line) => {
         if (cancelled) return;
-        setDreamLine(line);
+        // Written into the diary (founder, 2026-09-30: Sonder didn't
+        // remember what it said while drifting — it was never kept).
+        addIdleLine(line, "dream");
         if (voiceEnabled) speak(line, voice, { instant: true });
         // Part 76 item 1 (Option 3) — the durable signal, survives the
         // screen being locked; the dim overlay + bubble below are a bonus
@@ -177,15 +175,13 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!justWoke) return;
     const line = pickWakeLine();
-    setWakeLine(line);
+    addIdleLine(line, "wake");
     if (voiceEnabled) speak(line, voice, { instant: true });
     // A real wake moment always has the screen on (it's triggered by real
     // interaction — noteActivity), so a haptic pulse here is a genuine,
     // reliable cue rather than depending on screen state like the overlay.
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     clearJustWoke();
-    const id = setTimeout(() => setWakeLine(null), WAKE_LINE_DURATION_MS);
-    return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justWoke, clearJustWoke]);
 
@@ -287,10 +283,6 @@ export default function ChatScreen() {
   }));
   if (isWaiting) {
     diaryEntries.push({ key: "pending", role: "sonder", text: coldStartLine ?? "...", tone: "pending" });
-  } else if (isDreaming && dreamLine) {
-    diaryEntries.push({ key: "dream", role: "sonder", text: dreamLine, tone: "dream" });
-  } else if (wakeLine) {
-    diaryEntries.push({ key: "wake", role: "sonder", text: wakeLine, tone: "pending" });
   }
   if (error && !isWaiting) {
     diaryEntries.push({ key: "error", role: "sonder", text: error, tone: "pending" });

@@ -41,7 +41,9 @@ export function useSpeakReplies(
     if (messages.length <= spokenCountRef.current) return;
     const newOnes = messages.slice(spokenCountRef.current);
     spokenCountRef.current = messages.length;
-    const lastReply = [...newOnes].reverse().find((m) => m.role === "sonder");
+    // Dozing/waking lines (idle) are spoken by chat.tsx the moment they're
+    // said; skipping them here keeps them from being spoken twice.
+    const lastReply = [...newOnes].reverse().find((m) => m.role === "sonder" && !m.idle);
     if (!lastReply || !enabled) return;
     speak(lastReply.text, voice);
     // `enabled` read at the moment a reply lands, not a trigger itself.

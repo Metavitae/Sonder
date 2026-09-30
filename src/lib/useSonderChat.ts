@@ -43,11 +43,20 @@ export type ChatMessage = {
   // phone at `uri`; `description` is what Sonder saw, the only part that
   // ever travels again.
   photo?: { uri: string; description?: string };
+  // A line Sonder said on its own while dozing off ("dream") or on waking
+  // back up ("wake"). Founder, 2026-09-30: these used to show only for the
+  // moment and were never kept, so Sonder didn't remember saying them —
+  // now they're diary entries like any other, marked for Sonder's memory.
+  idle?: "dream" | "wake";
 };
 
 // What a diary entry says, in words — a photo is shared as what Sonder saw
 // in it, never as the image.
 export function wordsOf(m: ChatMessage): string {
+  // The server's TALKING_TO_ITSELF_NOTE explains these to Sonder (founder,
+  // 2026-09-30: Sonder likes to talk to itself when bored or distracted).
+  if (m.idle === "dream") return `[Talking to myself while drifting off, bored or distracted] ${m.text}`;
+  if (m.idle === "wake") return `[Talking to myself on waking back up] ${m.text}`;
   if (!m.photo) return m.text;
   const seen = m.photo.description
     ? `[Photo pasted into the diary — what it shows: ${m.photo.description}]`
@@ -419,5 +428,13 @@ export function useSonderChat(onVoiceOn?: () => void) {
     });
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, historyLoaded };
+  // A line Sonder says on its own (dozing off / waking): written into the
+  // diary in the ink of its current feeling, so it's kept and remembered.
+  const moodRef = useRef(mood);
+  moodRef.current = mood;
+  const addIdleLine = useCallback((text: string, idle: "dream" | "wake") => {
+    setMessages((prev) => [...prev, { ...sonderEntry(text, moodRef.current), idle }]);
+  }, []);
+
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded };
 }
