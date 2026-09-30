@@ -98,7 +98,7 @@ export function PermitsPanel({ onDone }: { onDone: (anyGranted: boolean) => void
 // reused here so the permits panel reads as the same fog-themed onboarding
 // object language, not a generic UI component. These are translucent
 // frosted panels rather than flat fills so the ambient violet mist mounted
-// behind every onboarding screen (onboarding/_layout.tsx's SpriteMistPoC)
+// behind every onboarding screen (onboarding/_layout.tsx's FilamentMist)
 // shows through, instead of a solid button sitting on top of it.
 const GOLD = "#D4AF7A";
 

@@ -7,7 +7,3 @@
 // fund it with yet. Flip this to true, no rebuild, once that resumes.
 export const SHARING_TIER_UP_ENABLED = false;
 
-// Founder, 2026-09-29: prototype of the "filaments / force field" mist
-// (FilamentMist.tsx), drawn over the old soft mist. False = the old mist
-// only, exactly as before.
-export const FILAMENT_MIST_ENABLED = true;

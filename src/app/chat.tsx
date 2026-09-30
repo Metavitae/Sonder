@@ -26,10 +26,8 @@ import { useSpeakReplies } from "../lib/useSpeakReplies";
 import { useSpeak } from "../lib/speak";
 import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
-import { SpriteMistPoC } from "../components/SpriteMistPoC";
 import { FilamentMist } from "../components/FilamentMist";
 import type { MistColor } from "../lib/mistAtlas";
-import { FILAMENT_MIST_ENABLED } from "../lib/featureFlags";
 import { SightSense } from "../components/SightSense";
 import { useCameraPermission } from "react-native-vision-camera";
 import { t } from "../lib/i18n";
@@ -105,9 +103,9 @@ export default function ChatScreen() {
   const { hand, setHand } = useDiaryHand();
   const { textSize, setTextSize } = useDiaryTextSize();
   const textScale = TEXT_SCALE[textSize];
-  // PROTOTYPE (2026-09-29): the founder previews each feeling's filament
-  // mist by tapping its color on the key page. Mist only, never the ink;
-  // back to Sonder's real feeling after 8 s.
+  // Tapping a color on the key page previews that feeling's mist (built as
+  // a prototype 2026-09-29; founder kept it for users 2026-09-30). Mist
+  // only, never the ink; back to Sonder's real feeling after 8 s.
   const [previewColor, setPreviewColor] = useState<MistColor | null>(null);
   // The feeling of the earlier page being read (null on the latest page).
   const [pageFeeling, setPageFeeling] = useState<MistColor | null>(null);
@@ -381,23 +379,19 @@ export default function ChatScreen() {
       }
       <View style={styles.blackBackdrop} pointerEvents="none" />
       {
-        // With the filament prototype on, FilamentMist draws its own soft
-        // background haze (founder: as expressive as the filaments, and
-        // less bright), so the old image mist is only the fallback.
+        // FilamentMist is the mist (founder, 2026-09-30: it replaces the old
+        // image mist for good) and draws its own soft background haze.
       }
-      {!FILAMENT_MIST_ENABLED && <SpriteMistPoC color={mistColor} intensity={mistIntensity} />}
-      {FILAMENT_MIST_ENABLED && (
-        <FilamentMist
-          color={mistColor}
-          intensity={mistIntensity}
-          rect={{
-            x: BOOK_MARGIN,
-            y: insets.top + TOP_BAR + BOOK_MARGIN,
-            width: windowWidth - BOOK_MARGIN * 2,
-            height: bookHeight - BOOK_MARGIN * 2,
-          }}
-        />
-      )}
+      <FilamentMist
+        color={mistColor}
+        intensity={mistIntensity}
+        rect={{
+          x: BOOK_MARGIN,
+          y: insets.top + TOP_BAR + BOOK_MARGIN,
+          width: windowWidth - BOOK_MARGIN * 2,
+          height: bookHeight - BOOK_MARGIN * 2,
+        }}
+      />
       <Animated.View
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.sightOverlay, sightOverlayStyle]}
@@ -537,7 +531,7 @@ export default function ChatScreen() {
           onDeleteEntry={confirmDelete}
           hand={hand}
           textScale={textScale}
-          onPreviewFeeling={FILAMENT_MIST_ENABLED ? setPreviewColor : undefined}
+          onPreviewFeeling={setPreviewColor}
           onViewedFeelingChange={setPageFeeling}
         />
         {ribbonsOpen && (

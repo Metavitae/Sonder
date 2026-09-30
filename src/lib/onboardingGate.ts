@@ -16,3 +16,13 @@ export const OnboardingGateContext = createContext<() => void>(() => {});
 export function useCompleteOnboardingGate() {
   return useContext(OnboardingGateContext);
 }
+
+// The reverse, for testing (founder, 2026-09-30: watch the whole opening —
+// Kithe's logo, Sonder's, then onboarding — without a reinstall wiping the
+// diary). replay-onboarding.tsx marks onboarding incomplete in storage,
+// then this flips the root guard back so the onboarding group returns.
+export const OnboardingReopenContext = createContext<() => void>(() => {});
+
+export function useReopenOnboardingGate() {
+  return useContext(OnboardingReopenContext);
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, StyleSheet, View, type ImageSourcePropType } from "react-native";
+import { Image, StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -12,7 +12,8 @@ import { createAudioPlayer } from "expo-audio";
 
 import { SONDER_WHISTLE_SOUND } from "../../assets/sound";
 import type { MistColor } from "../../lib/mistAtlas";
-import { SpriteMistPoC } from "../SpriteMistPoC";
+import { useSetOnboardingMistVisible } from "../../lib/onboardingMist";
+import { FilamentMist } from "../FilamentMist";
 
 const KITHE_LOGO: ImageSourcePropType = require("../../../assets/images/kithe-logo.png");
 // Sonder's own flat 2D logo — this is the exact bundled app icon (confirmed
@@ -20,40 +21,44 @@ const KITHE_LOGO: ImageSourcePropType = require("../../../assets/images/kithe-lo
 // downloading a duplicate), so no new asset was needed for this half.
 const SONDER_LOGO: ImageSourcePropType = require("../../../assets/images/icon.png");
 
-const FOG_IN_MS = 900;
-const FOG_HOLD_MS = 500;
-const FOG_OUT_MS = 900;
-const LOGO_HOLD_MS = 1100;
+const LOGO_SIZE = 180;
+const FADE_IN_MS = 900;
+const HOLD_MS = 1600;
+const FADE_OUT_MS = 900;
+const GAP_MS = 300;
+const MIST_INTENSITY = 0.6;
 const WHISTLE_VOLUME = 0.175;
 
-type StageConfig = { fogColor: MistColor; logo: ImageSourcePropType | null };
+type StageConfig = { color: MistColor; logo: ImageSourcePropType };
 
-// Part 42 correction (founder, live on-device 2026-08-20): the real Stage 1
-// opener is three fog pulses, not the single end-of-flow logo reveal the
-// original plan (Part 37) described — this component owns only that: fog
-// thickens (Kithe's colors) → thins to Kithe's logo → fog thickens again
-// (Sonder's colors) → thins to Sonder's logo → fog thickens a third time →
-// thins to nothing, handing off to setup.tsx's real fields. Color
-// assignment (Kithe→cyan, Sonder→blue) is a judgment call matching each
-// logo's own dominant hue family — no separate brand-color doc exists to
-// confirm against; revisit if it reads wrong live, per this codebase's own
-// standing practice.
+// The opening (founder, 2026-09-30: Kithe's logo presents Sonder's, in the
+// new filament mist). Each logo fades in with the diary's filament wisps
+// drifting from around it in its own color, holds, and fades out; then
+// Kithe's turn hands over to Sonder's. Onboarding's screen-wide mist stays
+// hidden meanwhile and fades in as the fields appear. Replaces the earlier
+// three thick fog pulses (Part 42), which relied on the old image mist
+// covering the whole screen. Colors (Kithe → green, Sonder → sky blue)
+// still match each logo's own hue family.
 const STAGES: StageConfig[] = [
-  { fogColor: "cyan", logo: KITHE_LOGO },
-  { fogColor: "blue", logo: SONDER_LOGO },
-  { fogColor: "violet", logo: null },
+  { color: "cyan", logo: KITHE_LOGO },
+  { color: "blue", logo: SONDER_LOGO },
 ];
 
 export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
   const [stageIndex, setStageIndex] = useState(0);
-  const [visibleLogo, setVisibleLogo] = useState<ImageSourcePropType | null>(null);
-  const fogOpacity = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const setMistVisible = useSetOnboardingMistVisible();
+  const { width, height } = useWindowDimensions();
+
+  useEffect(() => {
+    setMistVisible(false);
+  }, [setMistVisible]);
 
   // Complete Reference §1: Sonder "opens with a soft, wordless whistle, not
   // a jingle or a question — presence before performance." The asset was
   // bundled 2026-08-05 but never given a trigger; founder confirmed
   // (2026-09-23) it belongs at the very beginning, i.e. here, starting with
-  // the first fog pulse. Plays once, on mount only — not per stage.
+  // the first logo. Plays once, on mount only — not per stage.
   // Founder, first live listen (2026-09-23): full volume was too loud for
   // "soft" (0.35), then half that again on the second listen — WHISTLE_VOLUME
   // scales it down independent of device volume.
@@ -65,29 +70,20 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
   }, []);
 
   useEffect(() => {
-    const stage = STAGES[stageIndex];
     const isLast = stageIndex === STAGES.length - 1;
-
-    // Runs on JS after the fog has fully cleared — holds the revealed
-    // content on screen for a beat before either starting the next pulse
-    // or (on the last stage) handing off to setup.tsx's real fields.
     const finishStage = () => {
-      setTimeout(() => {
-        if (isLast) onComplete();
-        else setStageIndex((i) => i + 1);
-      }, LOGO_HOLD_MS);
+      if (isLast) {
+        setMistVisible(true);
+        onComplete();
+      } else {
+        setTimeout(() => setStageIndex((i) => i + 1), GAP_MS);
+      }
     };
-
-    fogOpacity.value = withSequence(
-      // Swap the logo only once the fog is fully opaque — the previous
-      // stage's content must stay visible while the fog is still thin/
-      // rising, not disappear early.
-      withTiming(1, { duration: FOG_IN_MS }, (finished) => {
-        if (finished) runOnJS(setVisibleLogo)(stage.logo);
-      }),
+    opacity.value = withSequence(
+      withTiming(1, { duration: FADE_IN_MS }),
       withDelay(
-        FOG_HOLD_MS,
-        withTiming(0, { duration: FOG_OUT_MS }, (finished) => {
+        HOLD_MS,
+        withTiming(0, { duration: FADE_OUT_MS }, (finished) => {
           if (finished) runOnJS(finishStage)();
         })
       )
@@ -95,27 +91,30 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageIndex]);
 
-  const fogStyle = useAnimatedStyle(() => ({ opacity: fogOpacity.value }));
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
   const stage = STAGES[stageIndex];
 
   return (
-    <View style={StyleSheet.absoluteFillObject}>
-      {visibleLogo !== null && (
-        <View style={styles.logoWrap} pointerEvents="none">
-          <Image source={visibleLogo} style={styles.logo} resizeMode="contain" />
-        </View>
-      )}
-      <Animated.View
-        style={[StyleSheet.absoluteFillObject, fogStyle]}
-        pointerEvents="none"
-      >
-        <SpriteMistPoC color={stage.fogColor} intensity={0.9} />
-      </Animated.View>
-    </View>
+    <Animated.View style={[StyleSheet.absoluteFillObject, style]} pointerEvents="none">
+      <FilamentMist
+        color={stage.color}
+        intensity={MIST_INTENSITY}
+        rim={false}
+        rect={{
+          x: (width - LOGO_SIZE) / 2,
+          y: (height - LOGO_SIZE) / 2,
+          width: LOGO_SIZE,
+          height: LOGO_SIZE,
+        }}
+      />
+      <View style={styles.logoWrap}>
+        <Image source={stage.logo} style={styles.logo} resizeMode="contain" />
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   logoWrap: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" },
-  logo: { width: 180, height: 180 },
+  logo: { width: LOGO_SIZE, height: LOGO_SIZE },
 });

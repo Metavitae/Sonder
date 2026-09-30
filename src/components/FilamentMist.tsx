@@ -22,9 +22,8 @@ import { MIST_GLOW, type MistColor } from "../lib/mistAtlas";
 // Drawn live with Skia. Performance (measured on the POCO, first prototype
 // was too heavy): no blur per strand — each wisp is a few wide, faint,
 // overlapping strokes, and ONE soft blur goes over the whole field; the
-// field is recomputed at most 30 times a second. PROTOTYPE — the old soft
-// mist stays underneath; FILAMENT_MIST_ENABLED in featureFlags.ts turns
-// this off.
+// field is recomputed at most 30 times a second. Since 2026-09-30 this is
+// the diary's only mist (founder: it replaces the old image mist).
 
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -161,10 +160,14 @@ export function FilamentMist({
   color,
   intensity = 0.5,
   rect,
+  rim = true,
 }: {
   color: MistColor;
   intensity?: number;
   rect: Rect;
+  // The soft outline hugging the rect. Off around a logo, which has no
+  // page edge to hug.
+  rim?: boolean;
 }) {
   const strands = useMemo(makeStrands, []);
 
@@ -293,7 +296,7 @@ export function FilamentMist({
         }
       >
         {/* Soft rim hugging the page, blurred with the smoke. */}
-        <RoundedRect x={x - 3} y={y - 3} width={width + 6} height={height + 6} r={r + 3} color={glow} style="stroke" strokeWidth={8} opacity={rimOpacity} />
+        {rim && <RoundedRect x={x - 3} y={y - 3} width={width + 6} height={height + 6} r={r + 3} color={glow} style="stroke" strokeWidth={8} opacity={rimOpacity} />}
         <Path path={outer} color={glow} style="stroke" strokeWidth={16} strokeCap="round" strokeJoin="round" opacity={0.14} />
         <Path path={middle} color={glow} style="stroke" strokeWidth={8} strokeCap="round" strokeJoin="round" opacity={0.26} />
         <Path path={inner} color={glow} style="stroke" strokeWidth={3} strokeCap="round" strokeJoin="round" opacity={0.6} />

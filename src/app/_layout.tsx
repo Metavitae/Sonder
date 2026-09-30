@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
 import { loadOnboardingState } from "../lib/onboardingStorage";
-import { OnboardingGateContext } from "../lib/onboardingGate";
+import { OnboardingGateContext, OnboardingReopenContext } from "../lib/onboardingGate";
 import { useServerWarmup } from "../lib/serverWarmup";
 
 SplashScreen.preventAutoHideAsync();
@@ -69,6 +69,19 @@ export default function RootLayout() {
     setOnboardingComplete(true);
   }, []);
 
+  // replay-onboarding.tsx (test path): same pattern in reverse.
+  const justReopenedRef = useRef(false);
+  useEffect(() => {
+    if (onboardingComplete === false && justReopenedRef.current) {
+      justReopenedRef.current = false;
+      router.replace("/onboarding" as never);
+    }
+  }, [onboardingComplete]);
+  const reopenOnboardingGate = useCallback(() => {
+    justReopenedRef.current = true;
+    setOnboardingComplete(false);
+  }, []);
+
   if (onboardingComplete === null) return null;
 
   // Required for useSafeAreaInsets (chat.tsx's input row) to resolve real
@@ -86,19 +99,22 @@ export default function RootLayout() {
   // tears down the router itself.
   return (
     <OnboardingGateContext.Provider value={completeOnboardingGate}>
-      <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={onboardingComplete}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="chat" />
-            <Stack.Screen name="sense-test" />
-          </Stack.Protected>
-          <Stack.Protected guard={!onboardingComplete}>
-            <Stack.Screen name="onboarding" />
-          </Stack.Protected>
-        </Stack>
-        <FreefallStartle />
-      </SafeAreaProvider>
+      <OnboardingReopenContext.Provider value={reopenOnboardingGate}>
+        <SafeAreaProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Protected guard={onboardingComplete}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="chat" />
+              <Stack.Screen name="sense-test" />
+              <Stack.Screen name="replay-onboarding" />
+            </Stack.Protected>
+            <Stack.Protected guard={!onboardingComplete}>
+              <Stack.Screen name="onboarding" />
+            </Stack.Protected>
+          </Stack>
+          <FreefallStartle />
+        </SafeAreaProvider>
+      </OnboardingReopenContext.Provider>
     </OnboardingGateContext.Provider>
   );
 }
