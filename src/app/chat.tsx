@@ -28,6 +28,7 @@ import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { SpriteMistPoC } from "../components/SpriteMistPoC";
 import { FilamentMist } from "../components/FilamentMist";
+import type { MistColor } from "../lib/mistAtlas";
 import { FILAMENT_MIST_ENABLED } from "../lib/featureFlags";
 import { SightSense } from "../components/SightSense";
 import { useCameraPermission } from "react-native-vision-camera";
@@ -101,6 +102,15 @@ export default function ChatScreen() {
   const bookRef = useRef<DiaryBookHandle>(null);
   const { paper, setPaper } = useDiaryPaper();
   const { hand, setHand } = useDiaryHand();
+  // PROTOTYPE (2026-09-29): the founder previews each feeling's filament
+  // mist by tapping its color on the key page. Mist only, never the ink;
+  // back to Sonder's real feeling after 8 s.
+  const [previewColor, setPreviewColor] = useState<MistColor | null>(null);
+  useEffect(() => {
+    if (!previewColor) return;
+    const id = setTimeout(() => setPreviewColor(null), 8000);
+    return () => clearTimeout(id);
+  }, [previewColor]);
   // The user's ribbons (founder, 2026-09-28): for the user to remember,
   // so Sonder never places, sees or colors them.
   const { bookmarks, addBookmark, removeBookmarks, entryDeleted } = useDiaryBookmarks();
@@ -364,10 +374,15 @@ export default function ChatScreen() {
         // screen (founder rule, 2026-08-13).
       }
       <View style={styles.blackBackdrop} pointerEvents="none" />
-      <SpriteMistPoC color={color} intensity={mistIntensity} />
+      {
+        // With the filament prototype on, FilamentMist draws its own soft
+        // background haze (founder: as expressive as the filaments, and
+        // less bright), so the old image mist is only the fallback.
+      }
+      {!FILAMENT_MIST_ENABLED && <SpriteMistPoC color={color} intensity={mistIntensity} />}
       {FILAMENT_MIST_ENABLED && (
         <FilamentMist
-          color={color}
+          color={previewColor ?? color}
           intensity={mistIntensity}
           rect={{
             x: BOOK_MARGIN,
@@ -495,6 +510,7 @@ export default function ChatScreen() {
           onRemoveBookmarks={removeBookmarks}
           onDeleteEntry={confirmDelete}
           hand={hand}
+          onPreviewFeeling={FILAMENT_MIST_ENABLED ? setPreviewColor : undefined}
         />
         {ribbonsOpen && (
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setRibbonsOpen(false)}>

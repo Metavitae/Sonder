@@ -81,6 +81,9 @@ type Props = {
   onDeleteEntry: (entryKey: string) => void;
   // The user's handwriting, their pick (diaryHand.ts).
   hand: Hand;
+  // PROTOTYPE (2026-09-29, filament mist): tapping a color on the key page
+  // previews that feeling's mist for a few seconds.
+  onPreviewFeeling?: (color: MistColor) => void;
 };
 
 function lineStyle(role: "user" | "sonder", userHand: TextStyle, sonderHand: TextStyle) {
@@ -105,6 +108,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     onRemoveBookmarks,
     onDeleteEntry,
     hand,
+    onPreviewFeeling,
   },
   ref
 ) {
@@ -366,7 +370,12 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         )}
       </Text>
       {FEELING_ORDER.map((c) => (
-        <Text key={c} style={[styles.keyLine, sonderText, { color: sonderInk(c, paper) }]} numberOfLines={1}>
+        <Text
+          key={c}
+          style={[styles.keyLine, sonderText, { color: sonderInk(c, paper) }]}
+          numberOfLines={1}
+          onPress={onPreviewFeeling ? () => onPreviewFeeling(c) : undefined}
+        >
           {`●  ${colorName(c)} — ${feelingWords(c)}`}
         </Text>
       ))}
