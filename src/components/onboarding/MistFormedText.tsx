@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { t } from "../../lib/i18n";
+import { HAND_STYLE, otherHand, useDiaryHand } from "../../lib/diaryHand";
 
 const FADE_IN_MS = 1400;
 const HOLD_MS = 1200;
@@ -18,7 +19,13 @@ const FADE_OUT_MS = 700;
 // onboarding/_layout.tsx level (plan §Component notes: "simpler reading of
 // 'forms through mist' than a literal mask-reveal" — a slow fade/settle
 // over the existing mist backdrop, not a separate reveal mechanism).
+// Founder, 2026-09-30: the greeting is in one of the diary's handwritings —
+// Sonder's own, i.e. the one the user didn't pick (Caveat by default).
+const GREETING_SIZE = { kalam: 30, caveat: 40 } as const;
+
 export function MistFormedText({ onComplete }: { onComplete: () => void }) {
+  const { hand } = useDiaryHand();
+  const sonderHand = otherHand(hand);
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(12);
 
@@ -43,12 +50,14 @@ export function MistFormedText({ onComplete }: { onComplete: () => void }) {
 
   return (
     <Animated.View style={[styles.wrap, style]} pointerEvents="none">
-      <Text style={styles.text}>{t("Hi, I'm Sonder.", "Hola, soy Sonder.")}</Text>
+      <Text style={[styles.text, { fontFamily: HAND_STYLE[sonderHand].fontFamily, fontSize: GREETING_SIZE[sonderHand] }]}>
+        {t("Hi, I'm Sonder.", "Hola, soy Sonder.")}
+      </Text>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { alignItems: "center", justifyContent: "center" },
-  text: { color: "#F0E6FF", fontSize: 28, fontWeight: "600", letterSpacing: 0.5 },
+  text: { color: "#F0E6FF" },
 });

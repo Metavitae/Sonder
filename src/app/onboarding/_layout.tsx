@@ -10,7 +10,8 @@ import { OnboardingMistContext } from "../../lib/onboardingMist";
 // Electric, from the screen's center, reaching the edges — no frame
 // (founder, 2026-09-30: the screen-framing version read as a rectangle
 // around everything; then "the whole thing becomes an electrifying mist",
-// the same electricity as the logos), dimmed behind the text.
+// the same electricity as the logos), dimmed behind the text. Blue with
+// some gold wisps among it (founder, 2026-09-30).
 const MIST_ROOT = 0;
 const MIST_STRENGTH = 0.45;
 const MIST_SPREAD = 3;
@@ -45,7 +46,9 @@ export default function OnboardingLayout() {
         <View style={styles.container}>
           <Animated.View style={[StyleSheet.absoluteFillObject, mistStyle]} pointerEvents="none">
             <FilamentMist
-              color="violet"
+              color="blue"
+              accent="amber"
+              motion="magenta"
               intensity={0.15}
               rim={false}
               radial

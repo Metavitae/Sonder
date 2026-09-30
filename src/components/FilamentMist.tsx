@@ -143,13 +143,16 @@ const MIN_FRAME_S = 1 / 30;
 // alike. All speeds go up by the same factor, keeping their ratios.
 const SPEED_BOOST = 1.8;
 
-// Electric mode (radial, around a logo): bolt shape changes per second,
-// points per bolt, and how far each kink jumps sideways.
-const ELECTRIC_RATE = 14;
+// Electric mode (the opening and onboarding). Founder, 2026-09-30: moving
+// like the diary's "warm and lit up" (red) wisps — lively, continuous — a
+// bit faster, with a fine crackling kink running along each wisp instead of
+// strikes that jump. ELECTRIC_RATE: how often the charge flickers.
+const ELECTRIC_RATE = 4; // per unit of the (sped-up) clock: ~14 a second
 const ELECTRIC_POINTS = 18;
-const ELECTRIC_JAG = 18;
-// Share of bolts showing at any moment; the rest are between strikes.
-const ELECTRIC_ALIVE = 0.55;
+const ELECTRIC_JAG = 9;
+const ELECTRIC_SPEED = 1.35;
+// Every ACCENT_EVERY-th wisp is drawn in the accent color.
+const ACCENT_EVERY = 4;
 
 // Cheap repeatable pseudo-random 0..1 from a number (worklet-safe).
 function hash(n: number): number {
@@ -193,6 +196,8 @@ export function FilamentMist({
   radial = false,
   electric = false,
   strength = 1,
+  motion,
+  accent,
 }: {
   color: MistColor;
   intensity?: number;
@@ -214,12 +219,17 @@ export function FilamentMist({
   // Overall brightness (1 = full). Behind onboarding's text it's dimmed so
   // the words stay readable.
   strength?: number;
+  // Move like this feeling instead of the color's own (the electric mist
+  // moves like red whatever its color).
+  motion?: MistColor;
+  // A second color for some of the wisps (onboarding: gold among the blue).
+  accent?: MistColor;
 }) {
   const strandCount = radial ? STRANDS * 2 : STRANDS;
   const strands = useMemo(() => makeStrands(strandCount), [strandCount]);
 
   // Each motion quality eases toward the new feeling's over ~1.2 s.
-  const m = MOTION[color];
+  const m = MOTION[motion ?? color];
   const speed = useSharedValue(m.speed);
   const reach = useSharedValue(m.reach);
   const sway = useSharedValue(m.sway);
@@ -249,7 +259,7 @@ export function FilamentMist({
   useFrameCallback((frame) => {
     const dt = (frame.timeSincePreviousFrame ?? 16) / 1000;
     // Electric bolts run on real time, the same crackle for every color.
-    time.value += electric ? dt : dt * speed.value * energy.value * SPEED_BOOST;
+    time.value += dt * speed.value * energy.value * SPEED_BOOST * (electric ? ELECTRIC_SPEED : 1);
     pending.value += dt;
     if (pending.value >= MIN_FRAME_S) {
       pending.value = 0;
@@ -261,12 +271,14 @@ export function FilamentMist({
 
   // `extent` < 1 draws only the inner part of each wisp, so the layered
   // strokes (wide and faint to narrow and brighter) fade toward the tips.
-  const buildPath = (t: number, extent: number) => {
+  // `only`: 0 = every wisp, 1 = the non-accent wisps, 2 = the accent ones.
+  const buildPath = (t: number, extent: number, only = 0) => {
     "worklet";
     const p = Skia.Path.Make();
     const perimeter = 2 * (width + height);
     const fl = flicker.value;
     for (let i = 0; i < strands.length; i++) {
+      if (only !== 0 && (i % ACCENT_EVERY === 0) !== (only === 2)) continue;
       const st = strands[i];
       const s = (st.s + 0.04 * slide.value * Math.sin(t * 0.22 + st.phase) + 1) % 1;
       let ox = 0;
@@ -297,52 +309,12 @@ export function FilamentMist({
       }
       const tx = -ny;
       const ty = nx;
-      if (electric) {
-        // Electric (founder, 2026-09-30: "magical electricity", not
-        // tentacles — a whole electrifying mist). Plasma-ball bolts: each
-        // one STRIKES (shows for a moment, then is gone, then strikes again
-        // elsewhere) instead of staying up and waving; jagged at two scales;
-        // forks partway out. Everything is keyed to the step and point
-        // index, so the three layered strokes stay on the same bolt.
-        const step = Math.floor(t * ELECTRIC_RATE);
-        if (hash(step * 1.37 + i * 9.13) > ELECTRIC_ALIVE) continue;
-        const len = st.length * spread * (0.4 + 0.6 * hash(step * 7.13 + i * 13.7));
-        const lean = (hash(step * 2.9 + i * 4.1) - 0.5) * 0.5;
-        const dx = nx + tx * lean;
-        const dy = ny + ty * lean;
-        p.moveTo(ox, oy);
-        for (let k = 1; k < ELECTRIC_POINTS; k++) {
-          const u = k / (ELECTRIC_POINTS - 1);
-          if (u > extent) break;
-          const jag =
-            (hash(step * 3.31 + i * 17.1 + k * 5.77) - 0.5) * 2 * ELECTRIC_JAG * Math.sqrt(u) +
-            (hash(step * 9.71 + i * 3.3 + k * 1.93) - 0.5) * ELECTRIC_JAG * 0.5;
-          const out = u * len;
-          const px = ox + dx * out + tx * jag;
-          const py = oy + dy * out + ty * jag;
-          p.lineTo(px, py);
-          // A fork off this kink, now and then.
-          if ((k === 5 || k === 10) && hash(step * 5.1 + i * 2.7 + k) < 0.5) {
-            const side = hash(step * 6.3 + i + k) < 0.5 ? -1 : 1;
-            const bx = dx * 0.8 + tx * side * 0.6;
-            const by = dy * 0.8 + ty * side * 0.6;
-            const blen = len * (0.15 + 0.2 * hash(step * 8.7 + i * 5.3 + k));
-            for (let b = 1; b <= 5; b++) {
-              const v = b / 5;
-              if (u + v * 0.3 > extent) break;
-              const bj = (hash(step * 4.4 + i * 7.7 + k * 3.1 + b) - 0.5) * ELECTRIC_JAG * 0.9;
-              p.lineTo(px + bx * blen * v + tx * bj, py + by * blen * v + ty * bj);
-            }
-            p.moveTo(px, py);
-          }
-        }
-        continue;
-      }
       const swell = 1 + breath.value * Math.sin(t * 0.7 + st.phase * 1.3);
       const tremble = fl * 0.15 * Math.sin(t * 9 + st.phase * 5);
       const len = st.length * spread * reach.value * swell * (1 + tremble);
-      for (let k = 0; k < POINTS; k++) {
-        const u = (k / (POINTS - 1)) * extent;
+      const pts = electric ? ELECTRIC_POINTS : POINTS;
+      for (let k = 0; k < pts; k++) {
+        const u = (k / (pts - 1)) * extent;
         // Hugging feelings bend wisps along the edge instead of outward.
         const out = u * len * (1 - wrap.value * 0.6);
         const along = u * u * len * wrap.value * 0.8 * Math.sin(st.phase);
@@ -350,7 +322,10 @@ export function FilamentMist({
           (Math.sin(u * st.wave * wave.value + t * 1.1 + st.phase) * st.sway * sway.value +
             Math.sin(u * st.wave * wave.value * 2.1 - t * 1.6 + st.phase * 2) * st.sway * sway.value * 0.3) *
             u +
-          along;
+          along +
+          (electric
+            ? (Math.sin(u * 23 + t * 7 + st.phase * 3) + 0.5 * Math.sin(u * 47 - t * 11 + st.phase)) * ELECTRIC_JAG * u
+            : 0);
         const px = ox + nx * out + tx * side;
         const py = oy + ny * out + ty * side;
         if (k === 0) p.moveTo(px, py);
@@ -359,9 +334,12 @@ export function FilamentMist({
     }
     return p;
   };
-  const outer = useDerivedValue(() => buildPath(tick.value, 1));
-  const middle = useDerivedValue(() => buildPath(tick.value, 0.7));
-  const inner = useDerivedValue(() => buildPath(tick.value, 0.4));
+  const split = accent ? 1 : 0;
+  const outer = useDerivedValue(() => buildPath(tick.value, 1, split));
+  const middle = useDerivedValue(() => buildPath(tick.value, 0.7, split));
+  const inner = useDerivedValue(() => buildPath(tick.value, 0.4, split));
+  const accentOuter = useDerivedValue(() => buildPath(tick.value, 1, accent ? 2 : 0));
+  const accentMiddle = useDerivedValue(() => buildPath(tick.value, 0.7, accent ? 2 : 0));
 
   const rimOpacity = useDerivedValue(() => 0.45 + 0.35 * breath.value * Math.sin(tick.value * 0.7));
 
@@ -435,7 +413,22 @@ export function FilamentMist({
       {/* Founder, 2026-09-29: slim, brighter cores of light inside the
           wisps, sharp (outside the blur), on the same paths and motion,
           ending before the tip so the smoke still trails off past them. */}
-      <Path path={electric ? outer : middle} color={brighten(glow, electric ? 0.7 : 0.55)} style="stroke" strokeWidth={electric ? 1.3 : 1.6} strokeCap="round" strokeJoin="round" opacity={0.85} />
+      <Path path={middle} color={brighten(glow, electric ? 0.7 : 0.55)} style="stroke" strokeWidth={electric ? 1.3 : 1.6} strokeCap="round" strokeJoin="round" opacity={0.85} />
+      {accent && (
+        <>
+          <Group
+            layer={
+              <Paint>
+                <Blur blur={5} />
+              </Paint>
+            }
+          >
+            <Path path={accentOuter} color={MIST_GLOW[accent]} style="stroke" strokeWidth={16} strokeCap="round" strokeJoin="round" opacity={0.14} />
+            <Path path={accentMiddle} color={MIST_GLOW[accent]} style="stroke" strokeWidth={8} strokeCap="round" strokeJoin="round" opacity={0.3} />
+          </Group>
+          <Path path={accentMiddle} color={brighten(MIST_GLOW[accent], 0.6)} style="stroke" strokeWidth={1.3} strokeCap="round" strokeJoin="round" opacity={0.85} />
+        </>
+      )}
       </Group>
     </Canvas>
   );

@@ -113,6 +113,7 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
         spread={MIST_SPREAD}
         radial
         electric
+        motion="magenta"
         rect={{
           x: (width - ROOT_SIZE) / 2,
           y: (height - ROOT_SIZE) / 2,

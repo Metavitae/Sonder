@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
 import { loadOnboardingState } from "../lib/onboardingStorage";
-import { OnboardingGateContext, OnboardingReopenContext } from "../lib/onboardingGate";
+import { OnboardingGateContext } from "../lib/onboardingGate";
 import { useServerWarmup } from "../lib/serverWarmup";
 
 SplashScreen.preventAutoHideAsync();
@@ -69,24 +69,6 @@ export default function RootLayout() {
     setOnboardingComplete(true);
   }, []);
 
-  // replay-onboarding.tsx (test path): same pattern in reverse. The key
-  // remounts the navigator: found live 2026-09-30, the onboarding screens
-  // finished earlier this session stayed mounted underneath, so a replay
-  // resumed them past the logo opening instead of starting over.
-  const [navKey, setNavKey] = useState(0);
-  const justReopenedRef = useRef(false);
-  useEffect(() => {
-    if (onboardingComplete === false && justReopenedRef.current) {
-      justReopenedRef.current = false;
-      router.replace("/onboarding" as never);
-    }
-  }, [onboardingComplete]);
-  const reopenOnboardingGate = useCallback(() => {
-    justReopenedRef.current = true;
-    setNavKey((k) => k + 1);
-    setOnboardingComplete(false);
-  }, []);
-
   if (onboardingComplete === null) return null;
 
   // Required for useSafeAreaInsets (chat.tsx's input row) to resolve real
@@ -104,22 +86,20 @@ export default function RootLayout() {
   // tears down the router itself.
   return (
     <OnboardingGateContext.Provider value={completeOnboardingGate}>
-      <OnboardingReopenContext.Provider value={reopenOnboardingGate}>
-        <SafeAreaProvider>
-          <Stack key={navKey} screenOptions={{ headerShown: false }}>
-            <Stack.Protected guard={onboardingComplete}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="chat" />
-              <Stack.Screen name="sense-test" />
-              <Stack.Screen name="replay-onboarding" />
-            </Stack.Protected>
-            <Stack.Protected guard={!onboardingComplete}>
-              <Stack.Screen name="onboarding" />
-            </Stack.Protected>
-          </Stack>
-          <FreefallStartle />
-        </SafeAreaProvider>
-      </OnboardingReopenContext.Provider>
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={onboardingComplete}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="chat" />
+            <Stack.Screen name="sense-test" />
+            <Stack.Screen name="replay-onboarding" />
+          </Stack.Protected>
+          <Stack.Protected guard={!onboardingComplete}>
+            <Stack.Screen name="onboarding" />
+          </Stack.Protected>
+        </Stack>
+        <FreefallStartle />
+      </SafeAreaProvider>
     </OnboardingGateContext.Provider>
   );
 }
