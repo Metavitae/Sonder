@@ -87,7 +87,10 @@ export default function RootLayout() {
   return (
     <OnboardingGateContext.Provider value={completeOnboardingGate}>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }}>
+        {/* Black under every screen (founder, 2026-09-30, launch screen
+            should show nothing): the navigator's default background is
+            light grey and flashed white for a moment on launch. */}
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
           <Stack.Protected guard={onboardingComplete}>
             <Stack.Screen name="index" />
             <Stack.Screen name="chat" />
