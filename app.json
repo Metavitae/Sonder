@@ -106,8 +106,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Sonder lets you paste your photos into your diary.",
-          "cameraPermission": "Sonder lets you take a photo to paste into your diary.",
-          "microphonePermission": false
+          "cameraPermission": "Sonder lets you take a photo to paste into your diary."
         }
       ]
     ],
