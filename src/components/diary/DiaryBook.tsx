@@ -418,7 +418,6 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         <Text
           key={c}
           style={[styles.keyLine, ls.lineHeight, sonderText, { color: sonderInk(c, paper) }]}
-          numberOfLines={1}
           onPress={onPreviewFeeling ? () => onPreviewFeeling(c) : undefined}
         >
           {`●  ${colorName(c)} — ${feelingWords(c)}`}
@@ -488,14 +487,35 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             },
           ]}
         >
-          {Array.from({ length: linesPerPage }, (_, k) => (
-            <View
-              key={k}
-              style={[styles.rule, { top: PAD_TOP + (k + 1) * line - 1, backgroundColor: paperStyle.rule }]}
-            />
-          ))}
+          {index === 0 ? (
+            // The key page scrolls on its own when the chosen text size
+            // makes it longer than the page (seen on the POCO at Extra
+            // large, 2026-09-29); its ruled lines scroll with the writing.
+            <ScrollView
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              style={StyleSheet.absoluteFill}
+              contentContainerStyle={{ minHeight: pageHeight }}
+            >
+              {Array.from({ length: 60 }, (_, k) => (
+                <View
+                  key={k}
+                  style={[styles.rule, { top: PAD_TOP + (k + 1) * line - 1, backgroundColor: paperStyle.rule }]}
+                />
+              ))}
+              <View style={[styles.writing, { paddingBottom: line }]}>{renderKeyPage()}</View>
+            </ScrollView>
+          ) : (
+            Array.from({ length: linesPerPage }, (_, k) => (
+              <View
+                key={k}
+                style={[styles.rule, { top: PAD_TOP + (k + 1) * line - 1, backgroundColor: paperStyle.rule }]}
+              />
+            ))
+          )}
+          {index > 0 && (
           <View style={styles.writing}>
-            {index === 0 ? renderKeyPage() : item.map(renderRow)}
+            {item.map(renderRow)}
             {isLast && (
               <View>
                 <TextInput
@@ -532,6 +552,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
               </View>
             )}
           </View>
+          )}
           {index > 0 && <Text style={[styles.pageNumber, ls.pageNumber, { color: paperStyle.faint }]}>{index}</Text>}
           {pageAnchors[index] && (
             <Pressable
