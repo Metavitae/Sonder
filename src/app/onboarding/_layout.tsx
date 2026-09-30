@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
@@ -16,6 +16,7 @@ const MIST_ROOT = 0;
 const MIST_STRENGTH = 0.45;
 const MIST_SPREAD = 3;
 const MIST_FADE_MS = 1200;
+const MIST_HIDE_MS = 550;
 
 // One continuous mist background mounted here, once, shared across
 // setup → permissions → intro — never remounted per screen, so its
@@ -33,11 +34,13 @@ export const unstable_settings = {
 
 export default function OnboardingLayout() {
   const { width, height } = useWindowDimensions();
-  const [mistVisible, setMistVisible] = useState(true);
+  const [mist, setMist] = useState({ visible: true, fade: true });
+  const setMistVisible = useCallback((visible: boolean, fade = visible) => setMist({ visible, fade }), []);
   const mistOpacity = useSharedValue(1);
   useEffect(() => {
-    mistOpacity.value = withTiming(mistVisible ? 1 : 0, { duration: mistVisible ? MIST_FADE_MS : 0 });
-  }, [mistVisible, mistOpacity]);
+    const duration = !mist.fade ? 0 : mist.visible ? MIST_FADE_MS : MIST_HIDE_MS;
+    mistOpacity.value = withTiming(mist.visible ? 1 : 0, { duration });
+  }, [mist, mistOpacity]);
   const mistStyle = useAnimatedStyle(() => ({ opacity: mistOpacity.value }));
 
   return (

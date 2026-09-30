@@ -93,7 +93,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
           <Stack.Protected guard={onboardingComplete}>
             <Stack.Screen name="index" />
-            <Stack.Screen name="chat" />
+            {/* No slide: chat.tsx fades itself in from black. */}
+            <Stack.Screen name="chat" options={{ animation: "none" }} />
             <Stack.Screen name="sense-test" />
             <Stack.Screen name="replay-onboarding" />
           </Stack.Protected>

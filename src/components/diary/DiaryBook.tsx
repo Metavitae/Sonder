@@ -432,6 +432,14 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       <Text style={[styles.keyLine, ls.lineHeight, sonderText, styles.keyGap, ls.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("Tap any line of mine to see how I felt.", "Toca una línea mía para ver cómo me sentía.")}
       </Text>
+      {/* Founder, 2026-09-30: users should know what Sonder's drifting /
+          waking lines are (same explanation Sonder itself is given). */}
+      <Text style={[styles.keyLine, ls.lineHeight, sonderText, styles.keyGap, ls.keyGap, { color: sonderInk("violet", paper) }]}>
+        {t(
+          "Sometimes I talk to myself when I'm bored or distracted.",
+          "A veces hablo conmigo cuando me aburro o me distraigo."
+        )}
+      </Text>
     </View>
   );
 

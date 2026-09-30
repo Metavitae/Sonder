@@ -49,6 +49,7 @@ import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
 // dimming, rather than teaching SpriteMistPoC itself about sleep.
 const DREAM_INTENSITY = 0.1;
 const DREAM_OVERLAY_OPACITY = 0.45;
+const ARRIVE_FADE_MS = 800;
 const TOP_BAR = 44;
 // Founder, 2026-09-28: the back-to-the-latest-page button sat too close to
 // the bottom edge of the phone — lifted well clear of it.
@@ -362,8 +363,17 @@ export default function ChatScreen() {
     ]);
   };
 
+  // Founder, 2026-09-30: the greeting and the diary should fade into each
+  // other — onboarding fades to black, and the diary fades in from black
+  // (also on every launch, after the black launch screen).
+  const arrive = useSharedValue(0);
+  useEffect(() => {
+    arrive.value = withTiming(1, { duration: ARRIVE_FADE_MS });
+  }, [arrive]);
+  const arriveStyle = useAnimatedStyle(() => ({ opacity: arrive.value }));
+
   return (
-    <View style={styles.container} onTouchStart={revealStatusBar}>
+    <Animated.View style={[styles.container, arriveStyle]} onTouchStart={revealStatusBar}>
       {sightAllowed && <SightSense quality={sightQuality} />}
       {
         // Always opaque, always above the camera: its feed is never on
@@ -594,7 +604,7 @@ export default function ChatScreen() {
           </Pressable>
         )}
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 

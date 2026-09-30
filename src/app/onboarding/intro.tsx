@@ -4,6 +4,9 @@ import { StyleSheet, View } from "react-native";
 import { MistFormedText } from "../../components/onboarding/MistFormedText";
 import { useOnboarding } from "../../lib/onboardingContext";
 import { useCompleteOnboardingGate } from "../../lib/onboardingGate";
+import { useSetOnboardingMistVisible } from "../../lib/onboardingMist";
+
+const HAND_OFF_MS = 600;
 
 // Step 7 (plan §Build/verification order) — replaces the placeholder.
 // "Hi, I'm Sonder." → real /chat hand-off. The glowing-sphere logo reveal
@@ -23,6 +26,7 @@ import { useCompleteOnboardingGate } from "../../lib/onboardingGate";
 export default function IntroScreen() {
   const { markComplete } = useOnboarding();
   const completeOnboardingGate = useCompleteOnboardingGate();
+  const setMistVisible = useSetOnboardingMistVisible();
   const handleTextComplete = useCallback(() => {
     // Hard hand-off — chat.tsx's own component tree is never touched, and
     // the user's actual first message now happens there, not here.
@@ -33,9 +37,14 @@ export default function IntroScreen() {
     // calling router.replace directly from here landed nowhere, since the
     // root's Stack.Protected still excluded "chat" at that instant
     // (confirmed live on-device, build order step 9).
-    markComplete();
-    completeOnboardingGate();
-  }, [markComplete, completeOnboardingGate]);
+    // Founder, 2026-09-30: fade into the diary, not a cut — the mist fades
+    // out right after the greeting, then the diary fades in (chat.tsx).
+    setMistVisible(false, true);
+    setTimeout(() => {
+      markComplete();
+      completeOnboardingGate();
+    }, HAND_OFF_MS);
+  }, [markComplete, completeOnboardingGate, setMistVisible]);
 
   return (
     <View style={styles.container}>
