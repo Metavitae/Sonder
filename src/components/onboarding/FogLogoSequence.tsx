@@ -15,13 +15,19 @@ import type { MistColor } from "../../lib/mistAtlas";
 import { useSetOnboardingMistVisible } from "../../lib/onboardingMist";
 import { FilamentMist } from "../FilamentMist";
 
-const KITHE_LOGO: ImageSourcePropType = require("../../../assets/images/kithe-logo.png");
-// Sonder's own flat 2D logo — this is the exact bundled app icon (confirmed
-// pixel-identical to Drive's "Sonder logo 2D no background.png" before
-// downloading a duplicate), so no new asset was needed for this half.
-const SONDER_LOGO: ImageSourcePropType = require("../../../assets/images/icon.png");
+// The 3D logos (founder, 2026-09-30), trimmed to square: Kithe's from
+// Drive Orbgroove/Art/"kithe-logo-3d-transparent.png" (only ~240x290 px of
+// logo in that file — soft at full size; swap in a larger render when one
+// exists), Sonder's from Sonder/Art/"Sonder logo 3D no background (1).png".
+const KITHE_LOGO: ImageSourcePropType = require("../../../assets/images/kithe-logo-3d.png");
+const SONDER_LOGO: ImageSourcePropType = require("../../../assets/images/sonder-logo-3d.png");
 
-const LOGO_SIZE = 180;
+const LOGO_SIZE = 200;
+// The wisps start just inside the logo's edge, so they come from behind it.
+const ROOT_INSET = 24;
+// How far the field reaches compared with the diary's: enough to fill the
+// screen from a logo-sized center.
+const MIST_SPREAD = 2.6;
 const FADE_IN_MS = 900;
 const HOLD_MS = 1600;
 const FADE_OUT_MS = 900;
@@ -102,11 +108,12 @@ export function FogLogoSequence({ onComplete }: { onComplete: () => void }) {
         color={stage.color}
         intensity={MIST_INTENSITY}
         rim={false}
+        spread={MIST_SPREAD}
         rect={{
-          x: (width - LOGO_SIZE) / 2,
-          y: (height - LOGO_SIZE) / 2,
-          width: LOGO_SIZE,
-          height: LOGO_SIZE,
+          x: (width - LOGO_SIZE) / 2 + ROOT_INSET,
+          y: (height - LOGO_SIZE) / 2 + ROOT_INSET,
+          width: LOGO_SIZE - ROOT_INSET * 2,
+          height: LOGO_SIZE - ROOT_INSET * 2,
         }}
       />
       <View style={styles.logoWrap}>

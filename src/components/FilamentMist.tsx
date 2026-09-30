@@ -76,6 +76,7 @@ function withAlpha(hex: string, alpha: number): string {
 type HazeProps = {
   index: number;
   rect: Rect;
+  spread: number;
   glow: string;
   tick: SharedValue<number>;
   reach: SharedValue<number>;
@@ -84,7 +85,7 @@ type HazeProps = {
   sway: SharedValue<number>;
 };
 
-function HazePool({ index, rect, glow, tick, reach, slide, breath, sway }: HazeProps) {
+function HazePool({ index, rect, spread, glow, tick, reach, slide, breath, sway }: HazeProps) {
   const { x, y, width, height } = rect;
   const phase = index * 2.39;
   const base = (index + 0.5) / HAZE;
@@ -107,11 +108,11 @@ function HazePool({ index, rect, glow, tick, reach, slide, breath, sway }: HazeP
       d -= width;
       ox = x; oy = y + height - d; nx = -1; ny = 0;
     }
-    const out = 30 * reach.value + 20 * sway.value * Math.sin(t * 0.3 + phase);
+    const out = (30 * reach.value + 20 * sway.value * Math.sin(t * 0.3 + phase)) * spread;
     return vec(ox + nx * out - ny * 25 * Math.sin(t * 0.2 + phase), oy + ny * out + nx * 25 * Math.sin(t * 0.2 + phase));
   });
   const radius = useDerivedValue(
-    () => (150 + 40 * index % 60) * (0.7 + 0.3 * reach.value) * (1 + breath.value * 0.6 * Math.sin(tick.value * 0.5 + phase))
+    () => (150 + 40 * index % 60) * spread * (0.7 + 0.3 * reach.value) * (1 + breath.value * 0.6 * Math.sin(tick.value * 0.5 + phase))
   );
   return (
     <Circle c={center} r={radius}>
@@ -141,14 +142,14 @@ type Strand = { s: number; length: number; phase: number; wave: number; sway: nu
 
 // Fixed per strand (seeded, so the field has the same shape each time the
 // app opens; only its motion varies).
-function makeStrands(): Strand[] {
+function makeStrands(count: number): Strand[] {
   let seed = 11;
   const rnd = () => {
     seed = (seed * 16807) % 2147483647;
     return seed / 2147483647;
   };
-  return Array.from({ length: STRANDS }, (_, i) => ({
-    s: (i + rnd() * 0.9) / STRANDS,
+  return Array.from({ length: count }, (_, i) => ({
+    s: (i + rnd() * 0.9) / count,
     length: 50 + rnd() * 100,
     phase: rnd() * Math.PI * 2,
     wave: 1.5 + rnd() * 2.5,
@@ -161,6 +162,7 @@ export function FilamentMist({
   intensity = 0.5,
   rect,
   rim = true,
+  spread = 1,
 }: {
   color: MistColor;
   intensity?: number;
@@ -168,8 +170,14 @@ export function FilamentMist({
   // The soft outline hugging the rect. Off around a logo, which has no
   // page edge to hug.
   rim?: boolean;
+  // How far the whole field reaches, as a multiple of the diary's. Above 1
+  // (the logo opening, founder 2026-09-30: fill the screen, mist and
+  // filaments as one) it also adds more wisps and a wide glow along each
+  // wisp, so the mist follows the filaments instead of sitting apart.
+  spread?: number;
 }) {
-  const strands = useMemo(makeStrands, []);
+  const strandCount = spread > 1 ? Math.round(STRANDS * 1.5) : STRANDS;
+  const strands = useMemo(() => makeStrands(strandCount), [strandCount]);
 
   // Each motion quality eases toward the new feeling's over ~1.2 s.
   const m = MOTION[color];
@@ -240,7 +248,7 @@ export function FilamentMist({
       const ty = nx;
       const swell = 1 + breath.value * Math.sin(t * 0.7 + st.phase * 1.3);
       const tremble = fl * 0.15 * Math.sin(t * 9 + st.phase * 5);
-      const len = st.length * reach.value * swell * (1 + tremble);
+      const len = st.length * spread * reach.value * swell * (1 + tremble);
       for (let k = 0; k < POINTS; k++) {
         const u = (k / (POINTS - 1)) * extent;
         // Hugging feelings bend wisps along the edge instead of outward.
@@ -285,8 +293,22 @@ export function FilamentMist({
       <Group transform={[{ scale: SCALE }]}>
       {/* Background haze, moving with the feeling, dim. */}
       {Array.from({ length: HAZE }, (_, i) => (
-        <HazePool key={i} index={i} rect={rect} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
+        <HazePool key={i} index={i} rect={rect} spread={spread} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
       ))}
+      {/* The glow along the wisps (spread > 1 only): the same paths, very
+          wide and faint under a heavy blur, so the mist follows them. */}
+      {spread > 1 && (
+        <Group
+          layer={
+            <Paint>
+              <Blur blur={22} />
+            </Paint>
+          }
+        >
+          <Path path={outer} color={glow} style="stroke" strokeWidth={70} strokeCap="round" strokeJoin="round" opacity={0.1} />
+          <Path path={middle} color={glow} style="stroke" strokeWidth={36} strokeCap="round" strokeJoin="round" opacity={0.14} />
+        </Group>
+      )}
       {/* The smoky wisps: layered faint strokes, one soft blur over all. */}
       <Group
         layer={
