@@ -7,10 +7,12 @@ import { FilamentMist } from "../../components/FilamentMist";
 import { OnboardingProvider } from "../../lib/onboardingContext";
 import { OnboardingMistContext } from "../../lib/onboardingMist";
 
-// Radial, from a small circle at the screen's center, reaching the edges —
-// no frame (founder, 2026-09-30: the screen-framing version read as a
-// rectangle around everything). Soft and smoky, not the logos' bolts.
-const MIST_ROOT = 90;
+// Electric, from the screen's center, reaching the edges — no frame
+// (founder, 2026-09-30: the screen-framing version read as a rectangle
+// around everything; then "the whole thing becomes an electrifying mist",
+// the same electricity as the logos), dimmed behind the text.
+const MIST_ROOT = 0;
+const MIST_STRENGTH = 0.45;
 const MIST_SPREAD = 3;
 const MIST_FADE_MS = 1200;
 
@@ -47,6 +49,8 @@ export default function OnboardingLayout() {
               intensity={0.15}
               rim={false}
               radial
+              electric
+              strength={MIST_STRENGTH}
               spread={MIST_SPREAD}
               rect={{
                 x: (width - MIST_ROOT) / 2,

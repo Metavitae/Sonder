@@ -23,10 +23,9 @@ const KITHE_LOGO: ImageSourcePropType = require("../../../assets/images/kithe-lo
 const SONDER_LOGO: ImageSourcePropType = require("../../../assets/images/sonder-logo-3d.png");
 
 const LOGO_SIZE = 200;
-// The bolts and the haze start from a small circle hidden behind the
-// logo's center (founder, 2026-09-30: starting at the logo's edges left an
+// The bolts and the haze start from the logo's center, hidden behind it (founder, 2026-09-30: starting at the logo's edges left an
 // empty rectangle around it), so they come out from behind it all around.
-const ROOT_SIZE = 70;
+const ROOT_SIZE = 0;
 // How far the field reaches compared with the diary's: enough to fill the
 // screen from a logo-sized center.
 const MIST_SPREAD = 3;

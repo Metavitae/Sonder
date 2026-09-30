@@ -143,9 +143,11 @@ const SPEED_BOOST = 1.8;
 
 // Electric mode (radial, around a logo): bolt shape changes per second,
 // points per bolt, and how far each kink jumps sideways.
-const ELECTRIC_RATE = 11;
-const ELECTRIC_POINTS = 16;
-const ELECTRIC_JAG = 16;
+const ELECTRIC_RATE = 14;
+const ELECTRIC_POINTS = 18;
+const ELECTRIC_JAG = 18;
+// Share of bolts showing at any moment; the rest are between strikes.
+const ELECTRIC_ALIVE = 0.55;
 
 // Cheap repeatable pseudo-random 0..1 from a number (worklet-safe).
 function hash(n: number): number {
@@ -188,6 +190,7 @@ export function FilamentMist({
   spread = 1,
   radial = false,
   electric = false,
+  strength = 1,
 }: {
   color: MistColor;
   intensity?: number;
@@ -206,6 +209,9 @@ export function FilamentMist({
   radial?: boolean;
   // Jagged, crackling bolts instead of smoky curls (the logo opening).
   electric?: boolean;
+  // Overall brightness (1 = full). Behind onboarding's text it's dimmed so
+  // the words stay readable.
+  strength?: number;
 }) {
   const strandCount = radial ? STRANDS * 2 : STRANDS;
   const strands = useMemo(() => makeStrands(strandCount), [strandCount]);
@@ -290,23 +296,43 @@ export function FilamentMist({
       const tx = -ny;
       const ty = nx;
       if (electric) {
-        // Electric (logo opening, founder 2026-09-30: "like electricity",
-        // not tentacles): each wisp is a jagged bolt that snaps to a new
-        // shape ELECTRIC_RATE times a second, its length flickering, instead
-        // of swelling and curling. The jag is keyed to the point index so
-        // the three layered strokes stay on the same bolt.
+        // Electric (founder, 2026-09-30: "magical electricity", not
+        // tentacles — a whole electrifying mist). Plasma-ball bolts: each
+        // one STRIKES (shows for a moment, then is gone, then strikes again
+        // elsewhere) instead of staying up and waving; jagged at two scales;
+        // forks partway out. Everything is keyed to the step and point
+        // index, so the three layered strokes stay on the same bolt.
         const step = Math.floor(t * ELECTRIC_RATE);
-        const len = st.length * spread * (0.55 + 0.45 * hash(step * 7.13 + i * 13.7));
-        for (let k = 0; k < ELECTRIC_POINTS; k++) {
+        if (hash(step * 1.37 + i * 9.13) > ELECTRIC_ALIVE) continue;
+        const len = st.length * spread * (0.4 + 0.6 * hash(step * 7.13 + i * 13.7));
+        const lean = (hash(step * 2.9 + i * 4.1) - 0.5) * 0.5;
+        const dx = nx + tx * lean;
+        const dy = ny + ty * lean;
+        p.moveTo(ox, oy);
+        for (let k = 1; k < ELECTRIC_POINTS; k++) {
           const u = k / (ELECTRIC_POINTS - 1);
           if (u > extent) break;
-          const jag = k === 0 ? 0 : (hash(step * 3.31 + i * 17.1 + k * 5.77) - 0.5) * 2 * ELECTRIC_JAG * Math.sqrt(u);
-          const bend = Math.sin(u * 2.2 + st.phase + t * 0.4) * st.sway * 0.6 * u;
+          const jag =
+            (hash(step * 3.31 + i * 17.1 + k * 5.77) - 0.5) * 2 * ELECTRIC_JAG * Math.sqrt(u) +
+            (hash(step * 9.71 + i * 3.3 + k * 1.93) - 0.5) * ELECTRIC_JAG * 0.5;
           const out = u * len;
-          const px = ox + nx * out + tx * (jag + bend);
-          const py = oy + ny * out + ty * (jag + bend);
-          if (k === 0) p.moveTo(px, py);
-          else p.lineTo(px, py);
+          const px = ox + dx * out + tx * jag;
+          const py = oy + dy * out + ty * jag;
+          p.lineTo(px, py);
+          // A fork off this kink, now and then.
+          if ((k === 5 || k === 10) && hash(step * 5.1 + i * 2.7 + k) < 0.5) {
+            const side = hash(step * 6.3 + i + k) < 0.5 ? -1 : 1;
+            const bx = dx * 0.8 + tx * side * 0.6;
+            const by = dy * 0.8 + ty * side * 0.6;
+            const blen = len * (0.15 + 0.2 * hash(step * 8.7 + i * 5.3 + k));
+            for (let b = 1; b <= 5; b++) {
+              const v = b / 5;
+              if (u + v * 0.3 > extent) break;
+              const bj = (hash(step * 4.4 + i * 7.7 + k * 3.1 + b) - 0.5) * ELECTRIC_JAG * 0.9;
+              p.lineTo(px + bx * blen * v + tx * bj, py + by * blen * v + ty * bj);
+            }
+            p.moveTo(px, py);
+          }
         }
         continue;
       }
@@ -341,6 +367,14 @@ export function FilamentMist({
   const r = 6;
   const { width: screenW, height: screenH } = useWindowDimensions();
 
+  // Electric: the haze and the bright core at the center flicker with the
+  // strikes, so the whole mist feels charged.
+  const charge = useDerivedValue(() =>
+    electric ? 0.7 + 0.3 * hash(Math.floor(tick.value * ELECTRIC_RATE) * 2.31) : 1
+  );
+  const coreCenter = vec(x + width / 2, y + height / 2);
+  const coreRadius = Math.min(screenW, screenH) * 0.45;
+
   return (
     <Canvas
       pointerEvents="none"
@@ -354,11 +388,18 @@ export function FilamentMist({
         transform: [{ scale: 1 / SCALE }],
       }}
     >
-      <Group transform={[{ scale: SCALE }]}>
+      <Group transform={[{ scale: SCALE }]} opacity={strength}>
       {/* Background haze, moving with the feeling, dim. */}
+      <Group opacity={charge}>
       {Array.from({ length: HAZE }, (_, i) => (
         <HazePool key={i} index={i} rect={rect} spread={spread} radial={radial} glow={glow} tick={tick} reach={reach} slide={slide} breath={breath} sway={sway} />
       ))}
+      {electric && (
+        <Circle c={coreCenter} r={coreRadius}>
+          <RadialGradient c={coreCenter} r={coreRadius} colors={[withAlpha(glow, 0.45), withAlpha(glow, 0.12), withAlpha(glow, 0)]} />
+        </Circle>
+      )}
+      </Group>
       {/* The glow along the wisps (radial only): the same paths, very
           wide and faint under a heavy blur, so the mist follows them. */}
       {radial && (
@@ -390,7 +431,7 @@ export function FilamentMist({
       {/* Founder, 2026-09-29: slim, brighter cores of light inside the
           wisps, sharp (outside the blur), on the same paths and motion,
           ending before the tip so the smoke still trails off past them. */}
-      <Path path={middle} color={brighten(glow, 0.55)} style="stroke" strokeWidth={1.6} strokeCap="round" strokeJoin="round" opacity={0.85} />
+      <Path path={electric ? outer : middle} color={brighten(glow, electric ? 0.7 : 0.55)} style="stroke" strokeWidth={electric ? 1.3 : 1.6} strokeCap="round" strokeJoin="round" opacity={0.85} />
       </Group>
     </Canvas>
   );
