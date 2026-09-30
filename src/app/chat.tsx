@@ -39,6 +39,7 @@ import { BOOK_MARGIN, DiaryBook, type DiaryBookHandle } from "../components/diar
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
 import { HAND_STYLE, otherHand, SONDER_HAND_STYLE, useDiaryHand } from "../lib/diaryHand";
+import { NEXT_TEXT_SIZE, TEXT_SCALE, useDiaryTextSize } from "../lib/diaryTextSize";
 import { PAPER_STYLE, RIBBON_RED, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
@@ -102,6 +103,8 @@ export default function ChatScreen() {
   const bookRef = useRef<DiaryBookHandle>(null);
   const { paper, setPaper } = useDiaryPaper();
   const { hand, setHand } = useDiaryHand();
+  const { textSize, setTextSize } = useDiaryTextSize();
+  const textScale = TEXT_SCALE[textSize];
   // PROTOTYPE (2026-09-29): the founder previews each feeling's filament
   // mist by tapping its color on the key page. Mist only, never the ink;
   // back to Sonder's real feeling after 8 s.
@@ -449,6 +452,26 @@ export default function ChatScreen() {
               <Text style={[styles.handSwatchText, { fontFamily: HAND_STYLE[h].fontFamily }]}>Aa</Text>
             </Pressable>
           ))}
+          {
+            // Founder decision 2026-09-29: three text sizes. One button that
+            // cycles Normal → Large → Extra large; the "A" is drawn at the
+            // current size.
+          }
+          <Pressable
+            onPress={() => setTextSize(NEXT_TEXT_SIZE[textSize])}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              textSize === "normal"
+                ? t("Text size: normal. Tap for large", "Tamaño de letra: normal. Toca para grande")
+                : textSize === "large"
+                  ? t("Text size: large. Tap for extra large", "Tamaño de letra: grande. Toca para muy grande")
+                  : t("Text size: extra large. Tap for normal", "Tamaño de letra: muy grande. Toca para normal")
+            }
+            style={styles.sizeButton}
+          >
+            <Text style={[styles.sizeButtonText, { fontSize: 12 + (textScale - 1) * 25 }]}>A</Text>
+          </Pressable>
         </View>
         {
           // Autumn/Troy pills removed per founder (2026-09-14 instructions,
@@ -513,6 +536,7 @@ export default function ChatScreen() {
           onRemoveBookmarks={removeBookmarks}
           onDeleteEntry={confirmDelete}
           hand={hand}
+          textScale={textScale}
           onPreviewFeeling={FILAMENT_MIST_ENABLED ? setPreviewColor : undefined}
           onViewedFeelingChange={setPageFeeling}
         />
@@ -556,7 +580,12 @@ export default function ChatScreen() {
               <Text
                 style={[
                   styles.disclosureText,
-                  { color: sonderInk(color, paper), fontFamily: SONDER_HAND_STYLE[otherHand(hand)].fontFamily },
+                  {
+                    color: sonderInk(color, paper),
+                    fontFamily: SONDER_HAND_STYLE[otherHand(hand)].fontFamily,
+                    fontSize: 17 * textScale,
+                    lineHeight: 26 * textScale,
+                  },
                 ]}
               >
                 {t(
@@ -659,6 +688,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   handSwatchActive: { borderWidth: 2, borderColor: "#FFFFFF" },
+  sizeButton: {
+    width: 30,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sizeButtonText: { color: "#F0E6FF", fontWeight: "700", includeFontPadding: false },
   handSwatchText: { color: "#F0E6FF", fontSize: 16, lineHeight: 20, includeFontPadding: false },
   disclosureWrap: {
     position: "absolute",

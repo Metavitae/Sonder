@@ -89,6 +89,8 @@ type Props = {
   // page — or before it, if Sonder wrote nothing there. Null = the latest
   // page, where the mist is Sonder's current feeling.
   onViewedFeelingChange?: (color: MistColor | null) => void;
+  // The user's text-size choice (diaryTextSize.ts): 1, 1.2 or 1.4.
+  textScale: number;
 };
 
 function lineStyle(role: "user" | "sonder", userHand: TextStyle, sonderHand: TextStyle) {
@@ -115,14 +117,39 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     hand,
     onPreviewFeeling,
     onViewedFeelingChange,
+    textScale,
   },
   ref
 ) {
-  const userText = HAND_STYLE[hand];
-  const sonderText = SONDER_HAND_STYLE[otherHand(hand)];
+  // Founder, 2026-09-29: the text-size choice scales everything alike —
+  // both handwritings by the same percentage, and the ruled line with them.
+  const line = Math.round(LINE * textScale);
+  const userText = useMemo(
+    () => ({ ...HAND_STYLE[hand], fontSize: HAND_STYLE[hand].fontSize * textScale }),
+    [hand, textScale]
+  );
+  const sonderText = useMemo(() => {
+    const base = SONDER_HAND_STYLE[otherHand(hand)];
+    return { ...base, fontSize: base.fontSize * textScale };
+  }, [hand, textScale]);
+  const ls = useMemo(
+    () => ({
+      row: { height: line, lineHeight: line },
+      lineHeight: { lineHeight: line },
+      keyGap: { marginTop: line },
+      input: { minHeight: line, lineHeight: line },
+      photoRow: { height: PHOTO_LINES * line },
+      photoFrame: { height: PHOTO_LINES * line - 12 },
+      date: { fontSize: 13 * textScale },
+      note: { lineHeight: 24 * textScale },
+      send: { fontSize: 22 * textScale },
+      pageNumber: { fontSize: 12 * textScale },
+    }),
+    [line, textScale]
+  );
   const textWidth = pageWidth - BOOK_MARGIN * 2 - PAD_X * 2;
   const pageHeight = bookHeight - BOOK_MARGIN * 2;
-  const linesPerPage = Math.max(8, Math.floor((pageHeight - PAD_TOP - PAD_BOTTOM) / LINE));
+  const linesPerPage = Math.max(6, Math.floor((pageHeight - PAD_TOP - PAD_BOTTOM) / line));
   const paperStyle = PAPER_STYLE[paper];
 
   // --- Measuring: the real text engine breaks each entry into lines at the
@@ -131,7 +158,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   const measuredRef = useRef(new Map<string, string[]>());
   const [measureTick, setMeasureTick] = useState(0);
   // A new width or a new handwriting re-measures everything.
-  const layoutKey = `${textWidth}:${hand}`;
+  const layoutKey = `${textWidth}:${hand}:${textScale}`;
   const layoutKeyRef = useRef(layoutKey);
   if (layoutKeyRef.current !== layoutKey) {
     layoutKeyRef.current = layoutKey;
@@ -163,7 +190,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     // two handwritings mean. It's page 0, drawn by renderKeyPage, no rows.
     return [[], ...cut];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, linesPerPage, measureTick, hand]);
+  }, [entries, linesPerPage, measureTick, hand, textScale]);
   const lastIndex = pages.length - 1;
   // Sonder's feeling as of the end of each page: its last line's ink there,
   // or carried over from before when Sonder wrote nothing on that page.
@@ -350,7 +377,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // line, or what fits above the keyboard (keeping one line of what came
   // before in view) — and scrolls inside itself past that.
   const pageLinesLeft = linesPerPage - lastPageRows;
-  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - LINE / 2) / LINE) - 1 : pageLinesLeft;
+  const fitLines = keyboardOpen ? Math.floor((spaceAboveKeyboard - line / 2) / line) - 1 : pageLinesLeft;
   const inputMaxLines = Math.max(2, Math.min(pageLinesLeft, fitLines));
   useEffect(() => {
     if (!keyboardOpen) {
@@ -358,7 +385,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       return;
     }
     const writingBottom =
-      BOOK_MARGIN + PAD_TOP + (lastPageRows + Math.min(inputLines, inputMaxLines)) * LINE + LINE / 2;
+      BOOK_MARGIN + PAD_TOP + (lastPageRows + Math.min(inputLines, inputMaxLines)) * line + line / 2;
     const y = Math.max(0, writingBottom - spaceAboveKeyboard);
     tiltRef.current?.scrollTo({ y, animated: true });
   }, [keyboardOpen, spaceAboveKeyboard, lastPageRows, inputLines, inputMaxLines]);
@@ -378,10 +405,10 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
 
   const renderKeyPage = () => (
     <View>
-      <Text style={[styles.keyLine, sonderText, { fontSize: sonderText.fontSize + 3 }, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, ls.lineHeight, sonderText, { fontSize: sonderText.fontSize + 3 }, { color: sonderInk("violet", paper) }]}>
         {t("How to read me", "Cómo leerme")}
       </Text>
-      <Text style={[styles.keyLine, sonderText, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, ls.lineHeight, sonderText, { color: sonderInk("violet", paper) }]}>
         {t(
           "The glow around this book is how I feel right now. I write in that color, and each line keeps the feeling it was written with.",
           "El brillo alrededor de este diario es cómo me siento ahora. Escribo en ese color, y cada línea guarda lo que sentía al escribirla."
@@ -390,20 +417,20 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       {FEELING_ORDER.map((c) => (
         <Text
           key={c}
-          style={[styles.keyLine, sonderText, { color: sonderInk(c, paper) }]}
+          style={[styles.keyLine, ls.lineHeight, sonderText, { color: sonderInk(c, paper) }]}
           numberOfLines={1}
           onPress={onPreviewFeeling ? () => onPreviewFeeling(c) : undefined}
         >
           {`●  ${colorName(c)} — ${feelingWords(c)}`}
         </Text>
       ))}
-      <Text style={[styles.keyLine, sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, ls.lineHeight, sonderText, styles.keyGap, ls.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("My handwriting is small, like this.", "Mi letra es pequeña, así.")}
       </Text>
-      <Text style={[styles.keyLine, userText, { color: userInk(paper) }]}>
+      <Text style={[styles.keyLine, ls.lineHeight, userText, { color: userInk(paper) }]}>
         {t("Yours is big, like this.", "La tuya es grande, así.")}
       </Text>
-      <Text style={[styles.keyLine, sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, ls.lineHeight, sonderText, styles.keyGap, ls.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("Tap any line of mine to see how I felt.", "Toca una línea mía para ver cómo me sentía.")}
       </Text>
     </View>
@@ -413,8 +440,8 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     if (row.kind === "photo") {
       // Tucked onto the page like a snapshot, a little crooked, never cut.
       return (
-        <Pressable key={i} style={styles.photoRow} onLongPress={() => onDeleteEntry(row.entryKey)}>
-          <View style={styles.photoFrame}>
+        <Pressable key={i} style={[styles.photoRow, ls.photoRow]} onLongPress={() => onDeleteEntry(row.entryKey)}>
+          <View style={[styles.photoFrame, ls.photoFrame]}>
             <Image source={{ uri: row.uri }} style={styles.photo} contentFit="cover" />
           </View>
         </Pressable>
@@ -422,7 +449,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     }
     if (row.kind === "date") {
       return (
-        <Text key={i} style={[styles.row, styles.dateText, { color: paperStyle.faint }]} numberOfLines={1}>
+        <Text key={i} style={[styles.row, ls.row, styles.dateText, ls.date, { color: paperStyle.faint }]} numberOfLines={1}>
           {row.text}
         </Text>
       );
@@ -433,6 +460,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         key={i}
         style={[
           styles.row,
+          ls.row,
           lineStyle(row.role, userText, sonderText),
           { color },
           row.tone === "pending" && styles.pending,
@@ -463,7 +491,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           {Array.from({ length: linesPerPage }, (_, k) => (
             <View
               key={k}
-              style={[styles.rule, { top: PAD_TOP + (k + 1) * LINE - 1, backgroundColor: paperStyle.rule }]}
+              style={[styles.rule, { top: PAD_TOP + (k + 1) * line - 1, backgroundColor: paperStyle.rule }]}
             />
           ))}
           <View style={styles.writing}>
@@ -475,7 +503,8 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                   style={[
                     styles.input,
                     userText,
-                    { color: userInk(paper), maxHeight: inputMaxLines * LINE },
+                    ls.input,
+                    { color: userInk(paper), maxHeight: inputMaxLines * line },
                   ]}
                   scrollEnabled
                   value={input}
@@ -497,13 +526,13 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                     accessibilityRole="button"
                     accessibilityLabel={t("Send", "Enviar")}
                   >
-                    <Text style={[styles.sendText, { color: sonderInk(feeling, paper) }]}>↵</Text>
+                    <Text style={[styles.sendText, ls.send, { color: sonderInk(feeling, paper) }]}>↵</Text>
                   </Pressable>
                 )}
               </View>
             )}
           </View>
-          {index > 0 && <Text style={[styles.pageNumber, { color: paperStyle.faint }]}>{index}</Text>}
+          {index > 0 && <Text style={[styles.pageNumber, ls.pageNumber, { color: paperStyle.faint }]}>{index}</Text>}
           {pageAnchors[index] && (
             <Pressable
               onPress={() => toggleRibbon(index)}
@@ -537,7 +566,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
       }
       <View style={[styles.measure, { width: textWidth - INPUT_PAD_RIGHT }]} pointerEvents="none">
         <Text
-          style={[styles.measureText, userText]}
+          style={[styles.measureText, ls.lineHeight, userText]}
           onTextLayout={(ev) => setInputLines(Math.max(1, ev.nativeEvent.lines.length))}
         >
           {input.length > 0 ? input : " "}
@@ -549,7 +578,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           return (
             <Text
               key={key}
-              style={[styles.measureText, lineStyle(e.role, userText, sonderText)]}
+              style={[styles.measureText, ls.lineHeight, lineStyle(e.role, userText, sonderText)]}
               onTextLayout={(ev) =>
                 recordLines(
                   key,
@@ -616,7 +645,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             onPress={() => setNote(null)}
             style={[styles.note, { backgroundColor: paperStyle.page, shadowColor: SONDER_INK[note.color] }]}
           >
-            <Text style={[styles.noteText, sonderText, { fontSize: sonderText.fontSize + 1 }, { color: sonderInk(note.color, paper) }]}>
+            <Text style={[styles.noteText, ls.note, sonderText, { fontSize: sonderText.fontSize + 1 }, { color: sonderInk(note.color, paper) }]}>
               {feelingNote(note.color)}
             </Text>
           </Pressable>
