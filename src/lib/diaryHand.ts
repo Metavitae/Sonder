@@ -16,6 +16,18 @@ export const HAND_STYLE: Record<Hand, { fontFamily: string; fontSize: number }> 
   caveat: { fontFamily: "Caveat_400Regular", fontSize: 27 },
 };
 
+// Founder, 2026-09-29: "if the user chooses Caveat or Kalam, Sonder uses
+// the one not selected". Sonder still writes small and the user big
+// (founder, 2026-09-28), so Sonder's sizes sit below the user's.
+export function otherHand(hand: Hand): Hand {
+  return hand === "kalam" ? "caveat" : "kalam";
+}
+
+export const SONDER_HAND_STYLE: Record<Hand, { fontFamily: string; fontSize: number }> = {
+  kalam: { fontFamily: "Kalam_400Regular", fontSize: 15 },
+  caveat: { fontFamily: "Caveat_400Regular", fontSize: 20 },
+};
+
 const STORAGE_KEY = "sonder_diary_hand_v1";
 
 export function useDiaryHand(): { hand: Hand; setHand: (h: Hand) => void } {

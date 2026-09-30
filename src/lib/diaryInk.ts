@@ -5,10 +5,9 @@ import type { Paper } from "./diaryLayout";
 // - The mist is Sonder's own feelings. In the diary it glows around the
 //   book, and Sonder's ink takes the color of the feeling it wrote with
 //   ("1 and 3"), so each line keeps the feeling of the moment it was written.
-// - Sonder has its own handwriting, and the user another. The user's is
-//   their pick of Caveat or Kalam (2026-09-29, see diaryHand.ts). Sonder's
-//   is still a stand-in (the phone's serif) until the founder picks one.
-export const SONDER_FONT = "serif";
+// - Sonder has its own handwriting, and the user another: the user picks
+//   Caveat or Kalam and Sonder writes in the other one (2026-09-29, see
+//   diaryHand.ts).
 
 // Deep enough to read on both papers, still clearly the mist's color.
 // Founder, 2026-09-29: new, more distinct palette (see

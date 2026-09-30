@@ -30,12 +30,11 @@ import {
 import {
   PAPER_STYLE,
   RIBBON_RED,
-  SONDER_FONT,
   SONDER_INK,
   sonderInk,
   userInk,
 } from "../../lib/diaryInk";
-import { HAND_STYLE, type Hand } from "../../lib/diaryHand";
+import { HAND_STYLE, otherHand, SONDER_HAND_STYLE, type Hand } from "../../lib/diaryHand";
 import { colorName, FEELING_ORDER, feelingNote, feelingWords } from "../../lib/feelingWords";
 import { type Bookmark, bookmarkId } from "../../lib/diaryBookmarks";
 import type { MistColor } from "../../lib/mistAtlas";
@@ -84,8 +83,8 @@ type Props = {
   hand: Hand;
 };
 
-function lineStyle(role: "user" | "sonder", userHand: TextStyle) {
-  return role === "sonder" ? styles.sonderText : userHand;
+function lineStyle(role: "user" | "sonder", userHand: TextStyle, sonderHand: TextStyle) {
+  return role === "sonder" ? sonderHand : userHand;
 }
 
 export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
@@ -110,6 +109,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   ref
 ) {
   const userText = HAND_STYLE[hand];
+  const sonderText = SONDER_HAND_STYLE[otherHand(hand)];
   const textWidth = pageWidth - BOOK_MARGIN * 2 - PAD_X * 2;
   const pageHeight = bookHeight - BOOK_MARGIN * 2;
   const linesPerPage = Math.max(8, Math.floor((pageHeight - PAD_TOP - PAD_BOTTOM) / LINE));
@@ -356,27 +356,27 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
 
   const renderKeyPage = () => (
     <View>
-      <Text style={[styles.keyLine, styles.sonderText, styles.keyTitle, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, sonderText, { fontSize: sonderText.fontSize + 3 }, { color: sonderInk("violet", paper) }]}>
         {t("How to read me", "Cómo leerme")}
       </Text>
-      <Text style={[styles.keyLine, styles.sonderText, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, sonderText, { color: sonderInk("violet", paper) }]}>
         {t(
           "The glow around this book is how I feel right now. I write in that color, and each line keeps the feeling it was written with.",
           "El brillo alrededor de este diario es cómo me siento ahora. Escribo en ese color, y cada línea guarda lo que sentía al escribirla."
         )}
       </Text>
       {FEELING_ORDER.map((c) => (
-        <Text key={c} style={[styles.keyLine, styles.sonderText, { color: sonderInk(c, paper) }]} numberOfLines={1}>
+        <Text key={c} style={[styles.keyLine, sonderText, { color: sonderInk(c, paper) }]} numberOfLines={1}>
           {`●  ${colorName(c)} — ${feelingWords(c)}`}
         </Text>
       ))}
-      <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("My handwriting is small, like this.", "Mi letra es pequeña, así.")}
       </Text>
       <Text style={[styles.keyLine, userText, { color: userInk(paper) }]}>
         {t("Yours is big, like this.", "La tuya es grande, así.")}
       </Text>
-      <Text style={[styles.keyLine, styles.sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
+      <Text style={[styles.keyLine, sonderText, styles.keyGap, { color: sonderInk("violet", paper) }]}>
         {t("Tap any line of mine to see how I felt.", "Toca una línea mía para ver cómo me sentía.")}
       </Text>
     </View>
@@ -406,7 +406,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         key={i}
         style={[
           styles.row,
-          lineStyle(row.role, userText),
+          lineStyle(row.role, userText, sonderText),
           { color },
           row.tone === "pending" && styles.pending,
           row.tone === "dream" && styles.dream,
@@ -519,7 +519,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
           return (
             <Text
               key={key}
-              style={[styles.measureText, lineStyle(e.role, userText)]}
+              style={[styles.measureText, lineStyle(e.role, userText, sonderText)]}
               onTextLayout={(ev) =>
                 recordLines(
                   key,
@@ -586,7 +586,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             onPress={() => setNote(null)}
             style={[styles.note, { backgroundColor: paperStyle.page, shadowColor: SONDER_INK[note.color] }]}
           >
-            <Text style={[styles.noteText, styles.sonderText, { color: sonderInk(note.color, paper) }]}>
+            <Text style={[styles.noteText, sonderText, { fontSize: sonderText.fontSize + 1 }, { color: sonderInk(note.color, paper) }]}>
               {feelingNote(note.color)}
             </Text>
           </Pressable>
@@ -613,7 +613,6 @@ const styles = StyleSheet.create({
   row: { height: LINE, lineHeight: LINE, fontSize: FONT_SIZE, includeFontPadding: false },
   // Founder, 2026-09-28: Sonder's writing and the user's must look really
   // apart — Sonder writes small, the user writes big, same ruled line.
-  sonderText: { fontFamily: SONDER_FONT, fontSize: 15 },
   dateText: { fontSize: 13, fontStyle: "italic", letterSpacing: 0.3 },
   pending: { opacity: 0.55 },
   dream: { fontStyle: "italic", opacity: 0.75 },
@@ -661,7 +660,6 @@ const styles = StyleSheet.create({
   measure: { position: "absolute", top: 0, left: 0, opacity: 0 },
   // The key page: every line sits on a ruled line, like the rest.
   keyLine: { lineHeight: LINE, includeFontPadding: false },
-  keyTitle: { fontSize: 18, fontStyle: "italic" },
   keyGap: { marginTop: LINE },
   noteWrap: { position: "absolute", left: 40, right: 40, top: "38%", alignItems: "center" },
   note: {

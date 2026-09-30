@@ -18,7 +18,7 @@ import { useSonderChat } from "../lib/useSonderChat";
 import { moodToMist } from "../lib/moodToMist";
 import { usePresence } from "../lib/motion";
 import { useIdleSleep } from "../lib/useIdleSleep";
-import { pickDreamLine, pickWakeLine } from "../lib/sleepBit";
+import { fetchDreamLine, pickWakeLine } from "../lib/sleepBit";
 import { notifyDreaming } from "../lib/dreamNotify";
 import { useHeadphonesConnected } from "../lib/audioRoute";
 import { useSonderVoice } from "../lib/voicePreference";
@@ -35,8 +35,8 @@ import { hasSeenDiaryDisclosure, markDiaryDisclosureSeen } from "../lib/diaryDis
 import { BOOK_MARGIN, DiaryBook, type DiaryBookHandle } from "../components/diary/DiaryBook";
 import type { DiaryEntry } from "../lib/diaryLayout";
 import { useDiaryPaper } from "../lib/diaryPaper";
-import { HAND_STYLE, useDiaryHand } from "../lib/diaryHand";
-import { PAPER_STYLE, RIBBON_RED, SONDER_FONT, sonderInk, userInk } from "../lib/diaryInk";
+import { HAND_STYLE, otherHand, SONDER_HAND_STYLE, useDiaryHand } from "../lib/diaryHand";
+import { PAPER_STYLE, RIBBON_RED, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
 import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
@@ -136,16 +136,25 @@ export default function ChatScreen() {
   const dreamOverlay = useSharedValue(0);
 
   useEffect(() => {
+    let cancelled = false;
     if (isDreaming) {
-      const line = pickDreamLine();
-      setDreamLine(line);
-      if (voiceEnabled) speak(line, voice, { instant: true });
-      // Part 76 item 1 (Option 3) — the durable signal, survives the
-      // screen being locked; the dim overlay + bubble below are a bonus
-      // for whenever the screen does happen to be on, not the real path.
-      notifyDreaming(line);
+      setDreamLine("");
+      // Written fresh by the server each time (idle-line voice guidance,
+      // 2026-09-29), falling back to a local line when offline.
+      fetchDreamLine().then((line) => {
+        if (cancelled) return;
+        setDreamLine(line);
+        if (voiceEnabled) speak(line, voice, { instant: true });
+        // Part 76 item 1 (Option 3) — the durable signal, survives the
+        // screen being locked; the dim overlay + bubble below are a bonus
+        // for whenever the screen does happen to be on, not the real path.
+        notifyDreaming(line);
+      });
     }
     dreamOverlay.value = withTiming(isDreaming ? DREAM_OVERLAY_OPACITY : 0, { duration: 600 });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDreaming, dreamOverlay]);
 
@@ -262,7 +271,7 @@ export default function ChatScreen() {
   }));
   if (isWaiting) {
     diaryEntries.push({ key: "pending", role: "sonder", text: coldStartLine ?? "...", tone: "pending" });
-  } else if (isDreaming) {
+  } else if (isDreaming && dreamLine) {
     diaryEntries.push({ key: "dream", role: "sonder", text: dreamLine, tone: "dream" });
   } else if (wakeLine) {
     diaryEntries.push({ key: "wake", role: "sonder", text: wakeLine, tone: "pending" });
@@ -510,7 +519,12 @@ export default function ChatScreen() {
         {showDisclosure && (
           <Animated.View style={[styles.disclosureWrap, disclosureStyle]}>
             <Pressable onPress={dismissDisclosure} hitSlop={24}>
-              <Text style={[styles.disclosureText, { color: sonderInk(color, paper) }]}>
+              <Text
+                style={[
+                  styles.disclosureText,
+                  { color: sonderInk(color, paper), fontFamily: SONDER_HAND_STYLE[otherHand(hand)].fontFamily },
+                ]}
+              >
                 {t(
                   "This is a private page. Sonder — not a person — may write back.",
                   "Esta es una página privada. Sonder —no una persona— puede escribirte."
@@ -620,7 +634,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   disclosureText: {
-    fontFamily: SONDER_FONT,
     fontSize: 17,
     lineHeight: 26,
     textAlign: "center",
