@@ -364,9 +364,17 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     };
   }, [settle]);
 
+  // Real bug (8T, 2026-10-01): Android also ends a momentum scroll for the
+  // book's own jumps. On opening, the jump to a page not laid out yet stopped
+  // short, and that stop was taken as the reader's page — so the diary
+  // opened one page early every time. Only a finger swipe picks the page;
+  // the book's own jumps set it directly.
+  const fingerRef = useRef(false);
   const handleMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       draggingRef.current = false;
+      if (!fingerRef.current) return;
+      fingerRef.current = false;
       setIndex(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
     },
     [pageWidth, setIndex]
@@ -678,6 +686,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             scrollEventThrottle={32}
             onScrollBeginDrag={() => {
               draggingRef.current = true;
+              fingerRef.current = true;
             }}
             onMomentumScrollBegin={() => {
               draggingRef.current = true;
