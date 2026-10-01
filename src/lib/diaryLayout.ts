@@ -33,6 +33,9 @@ export const PHOTO_LINES = 7;
 
 export type DiaryRow =
   | { kind: "date"; text: string }
+  // An empty ruled line left before a new day (founder, 2026-10-01: "a line
+  // or two of spacing" between one day's writing and the next date).
+  | { kind: "gap" }
   | { kind: "photo"; uri: string; entryKey: string; at?: number }
   | {
       kind: "line";
@@ -81,6 +84,7 @@ export function buildRows(
     if (entry.at !== undefined) {
       const day = dayKey(entry.at);
       if (day !== lastDay) {
+        if (rows.length > 0) rows.push({ kind: "gap" });
         rows.push({ kind: "date", text: formatDiaryDate(entry.at) });
         lastDay = day;
       }
@@ -122,6 +126,8 @@ export function paginate(rows: DiaryRow[], linesPerPage: number): DiaryRow[][] {
   let used = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    // A blank line never opens a page — the new day just starts overleaf.
+    if (row.kind === "gap" && used === 0) continue;
     const size = rowLines(row);
     // A date never sits alone at the foot of a page — it moves over with
     // the writing it introduces, the way you'd start the new day overleaf.

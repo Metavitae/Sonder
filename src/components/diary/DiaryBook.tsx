@@ -495,6 +495,9 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
         </Pressable>
       );
     }
+    if (row.kind === "gap") {
+      return <View key={i} style={[styles.row, ls.row]} />;
+    }
     if (row.kind === "date") {
       return (
         <Text key={i} style={[styles.row, ls.row, styles.dateText, ls.date, { color: paperStyle.faint }]} numberOfLines={1}>
