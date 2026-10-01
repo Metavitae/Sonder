@@ -296,20 +296,28 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // change in the page count re-seats a reader who was on the latest page
   // exactly on the new last page (animated only when moving forward).
   const prevLastRef = useRef(lastIndex);
+  // Founder, 2026-09-30 (footage): on opening, the pages are first cut
+  // before the handwriting is measured, then re-cut — that used to play a
+  // page turn on every launch and could stop it part-way, the next page
+  // peeking in. Only real new writing turns the page; anything else jumps.
+  const prevCountRef = useRef(entries.length);
   useEffect(() => {
     const prevLast = prevLastRef.current;
+    const newWriting = entries.length > prevCountRef.current;
+    prevCountRef.current = entries.length;
     if (lastIndex === prevLast) return;
     prevLastRef.current = lastIndex;
     const wasAtLatest = indexRef.current >= prevLast;
     if (wasAtLatest && ready) {
       listRef.current?.scrollToOffset({
         offset: lastIndex * pageWidth,
-        animated: lastIndex > prevLast,
+        animated: newWriting && lastIndex > prevLast,
       });
       indexRef.current = lastIndex;
     } else {
       setIndex(Math.min(indexRef.current, lastIndex));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastIndex, ready, setIndex, pageWidth]);
 
   // Real bug (on the POCO, 2026-09-28): after a photo, Sonder's reply spilled
@@ -319,12 +327,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // squarely on the page it was heading for (never while a finger is on it).
   const offsetRef = useRef(0);
   const draggingRef = useRef(false);
+  // Always re-seats (no comparison): the last known offset can be stale
+  // after a programmatic turn, which left the next page peeking in.
   const settle = useCallback(() => {
     if (draggingRef.current) return;
-    const target = indexRef.current * pageWidth;
-    if (Math.abs(offsetRef.current - target) > 1) {
-      listRef.current?.scrollToOffset({ offset: target, animated: false });
-    }
+    listRef.current?.scrollToOffset({ offset: indexRef.current * pageWidth, animated: false });
   }, [pageWidth]);
   useEffect(() => {
     const id = setTimeout(settle, 700);

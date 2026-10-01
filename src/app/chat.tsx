@@ -89,7 +89,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded } =
+  const { messages, isWaiting, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -283,7 +283,10 @@ export default function ChatScreen() {
     photoUri: m.photo?.uri,
   }));
   if (isWaiting) {
-    diaryEntries.push({ key: "pending", role: "sonder", text: coldStartLine ?? "...", tone: "pending" });
+    // Founder, 2026-09-30 (choice B): while Sonder writes, only faint dots in
+    // its ink — never the "waking up" sentence, which was then replaced by
+    // the real reply and read as an answer that changed.
+    diaryEntries.push({ key: "pending", role: "sonder", text: "· · ·", tone: "pending" });
   }
   if (error && !isWaiting) {
     diaryEntries.push({ key: "error", role: "sonder", text: error, tone: "pending" });
