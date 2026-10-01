@@ -308,12 +308,16 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     if (lastIndex === prevLast) return;
     prevLastRef.current = lastIndex;
     const wasAtLatest = indexRef.current >= prevLast;
-    if (wasAtLatest && ready) {
+    // Real bug (8T, 2026-10-01 footage): on opening, a page added by the
+    // re-cut while the handwriting was still being measured (not `ready`)
+    // left the reader one page short of the latest. A reader on the latest
+    // page now always follows it; only new writing, once ready, animates.
+    if (wasAtLatest) {
       listRef.current?.scrollToOffset({
         offset: lastIndex * pageWidth,
-        animated: newWriting && lastIndex > prevLast,
+        animated: ready && newWriting && lastIndex > prevLast,
       });
-      indexRef.current = lastIndex;
+      setIndex(lastIndex);
     } else {
       setIndex(Math.min(indexRef.current, lastIndex));
     }
