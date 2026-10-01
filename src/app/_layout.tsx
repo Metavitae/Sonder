@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { FreefallStartle } from "../components/FreefallStartle";
 import { loadOnboardingState } from "../lib/onboardingStorage";
+import { loadTestClock } from "../lib/testClock";
 import { OnboardingGateContext } from "../lib/onboardingGate";
 import { useServerWarmup } from "../lib/serverWarmup";
 
@@ -48,7 +49,7 @@ export default function RootLayout() {
   useServerWarmup();
 
   useEffect(() => {
-    loadOnboardingState().then((s) => {
+    Promise.all([loadOnboardingState(), loadTestClock()]).then(([s]) => {
       setOnboardingComplete(s.complete);
       SplashScreen.hideAsync();
     });
@@ -97,6 +98,7 @@ export default function RootLayout() {
             <Stack.Screen name="chat" options={{ animation: "none" }} />
             <Stack.Screen name="sense-test" />
             <Stack.Screen name="replay-onboarding" />
+            <Stack.Screen name="test-date" />
           </Stack.Protected>
           <Stack.Protected guard={!onboardingComplete}>
             <Stack.Screen name="onboarding" />

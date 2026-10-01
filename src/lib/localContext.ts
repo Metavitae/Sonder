@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { nowMs } from "./testClock";
 
 // Per "Sonder - Direct Instructions for CC 2026-09-14 - Proactive
 // conversation and coarse-location weather" items 1-2: what's true around
@@ -15,7 +16,7 @@ import * as Location from "expo-location";
 // before Kithe ships commercially.
 
 // Day of week + clock time, from the phone's own clock — no permission.
-export function localTimeLabel(now = new Date()): string {
+export function localTimeLabel(now = new Date(nowMs())): string {
   const day = now.toLocaleDateString("en-US", { weekday: "long" });
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return `${day}, ${time}`;
