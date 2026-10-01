@@ -330,6 +330,28 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     const id = setTimeout(settle, 700);
     return () => clearTimeout(id);
   }, [pages, settle]);
+  // Founder, 2026-09-30 (8T, reply spilling onto a new page while the
+  // keyboard closed): the turn toward the new page was cut off and the
+  // book stayed between pages. Also set it down after every change of last
+  // page and whenever the keyboard opens or closes.
+  useEffect(() => {
+    const id = setTimeout(settle, 900);
+    return () => clearTimeout(id);
+  }, [lastIndex, settle]);
+  useEffect(() => {
+    let id: ReturnType<typeof setTimeout> | undefined;
+    const later = () => {
+      if (id) clearTimeout(id);
+      id = setTimeout(settle, 500);
+    };
+    const show = Keyboard.addListener("keyboardDidShow", later);
+    const hide = Keyboard.addListener("keyboardDidHide", later);
+    return () => {
+      if (id) clearTimeout(id);
+      show.remove();
+      hide.remove();
+    };
+  }, [settle]);
 
   const handleMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
