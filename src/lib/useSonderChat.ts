@@ -189,6 +189,9 @@ export function useSonderChat(onVoiceOn?: () => void) {
   // Same moment as hasLoadedHistoryRef, but as state so useSpeakReplies can
   // wait for it: restored history must not be mistaken for new replies.
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // The stored diary couldn't be read (see chatHistory.ts): never persist
+  // this session, so the stored pages survive for the next launch.
+  const [historyFailed, setHistoryFailed] = useState(false);
   // Real bug found 2026-08-18 (live on-device retest of Part 33, chasing
   // Part 34 item 1): loadStoredMessages() is async, but nothing stopped
   // send() from firing before it resolved — a message sent in that window
@@ -200,10 +203,11 @@ export function useSonderChat(onVoiceOn?: () => void) {
 
   useEffect(() => {
     let cancelled = false;
-    loadPromiseRef.current = loadStoredMessages().then((stored) => {
+    loadPromiseRef.current = loadStoredMessages().then(({ messages: stored, failed }) => {
       if (cancelled) return;
       if (stored.length > 0) setMessages(stored);
-      hasLoadedHistoryRef.current = true;
+      if (failed) setHistoryFailed(true);
+      else hasLoadedHistoryRef.current = true;
       setHistoryLoaded(true);
       // The first-conversation opener (2026-09-14, Sonder writing the first
       // line itself) is retired — founder, 2026-09-27: "Leave the page
@@ -437,5 +441,5 @@ export function useSonderChat(onVoiceOn?: () => void) {
     setMessages((prev) => [...prev, { ...sonderEntry(text, moodRef.current), idle }]);
   }, []);
 
-  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded };
+  return { messages, isWaiting, coldStartLine, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded, historyFailed };
 }

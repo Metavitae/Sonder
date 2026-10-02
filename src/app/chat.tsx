@@ -89,7 +89,7 @@ export default function ChatScreen() {
   // pipeline as chat replies (Part 31).
   const { voice, voiceEnabled, setVoiceEnabled } = useSonderVoice();
   const turnVoiceOn = useCallback(() => setVoiceEnabled(true), [setVoiceEnabled]);
-  const { messages, isWaiting, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded } =
+  const { messages, isWaiting, error, mood, traitSignal, send, sendPhoto, deleteMessage, addIdleLine, historyLoaded, historyFailed } =
     useSonderChat(turnVoiceOn);
   const { weights: traitWeights, applyTraitSignal } = useCharacterTraits();
   const [input, setInput] = useState("");
@@ -290,6 +290,17 @@ export default function ChatScreen() {
   }
   if (error && !isWaiting) {
     diaryEntries.push({ key: "error", role: "sonder", text: error, tone: "pending" });
+  }
+  if (historyFailed) {
+    diaryEntries.unshift({
+      key: "load-failed",
+      role: "sonder",
+      text: t(
+        "I couldn't open our earlier pages just now. They're safe — close me and open me again.",
+        "No pude abrir nuestras páginas anteriores ahora. Están a salvo: ciérrame y vuelve a abrirme."
+      ),
+      tone: "pending",
+    });
   }
 
   const handleInputChange = (text: string) => {
