@@ -39,11 +39,15 @@ const MAX_STORED_MESSAGES = 5000;
 // the same reason Trait/Warmth/etc. already are (separate packages, no
 // shared types module yet) — keep both sides in sync by hand if the tag
 // format ever changes.
-const ANY_MOOD_TAG_RE = /[*_`~]*\[\[mood:[^\]]*\]\][*_`~]*/gi;
-const ANY_TRAIT_TAG_RE = /[*_`~]*\[\[trait:[^\]]*\]\][*_`~]*/gi;
+// Founder, 2026-10-02: widened to match groq.ts's LEAKED_TAG_RE — also catches
+// half-written tags (one bracket, or never closed), not just [[...]].
+const LEAKED_TAG_RE = /[*_`~]*\[{1,2}\s*(?:mood|trait|voice)\s*:[^\]\n]*(?:\]{1,2}|(?=\n|$))[*_`~]*/gi;
 
 function stripLeakedTags(text: string): string {
-  return text.replace(ANY_MOOD_TAG_RE, "").replace(ANY_TRAIT_TAG_RE, "").trim();
+  return text
+    .replace(LEAKED_TAG_RE, "")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
 }
 
 // Founder, 2026-10-01: a diary that can't be read must never be saved over.

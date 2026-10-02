@@ -464,6 +464,22 @@ const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
 // [[trait:...]], stripped here and surfaced to the client as voiceOn.
 const VOICE_ON_TAG_RE = /[*_`~]*\[\[voice:on\]\][*_`~]*/gi;
 
+// Founder, 2026-10-02 (Gemma 4 test, "fix the tag cleaner first"): the
+// patterns above only strip well-formed [[...]] tags. A model that half-writes
+// one — "[mood:WARM:AROUS]", or "[mood:WARMTHAROUS" with no close at all —
+// leaked it into the diary as visible text. Last pass over every reply: any
+// mood/trait/voice tag fragment, one or two brackets, closed or not (an
+// unclosed one runs to the end of its line), is removed. The values are
+// still only ever read from the strict patterns above.
+const LEAKED_TAG_RE = /[*_`~]*\[{1,2}\s*(?:mood|trait|voice)\s*:[^\]\n]*(?:\]{1,2}|(?=\n|$))[*_`~]*/gi;
+
+function stripLeakedTags(text: string): string {
+  return text
+    .replace(LEAKED_TAG_RE, "")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+
 function extractVoiceOn(raw: string): { reply: string; voiceOn: boolean } {
   const voiceOn = VOICE_ON_TAG_RE.test(raw);
   VOICE_ON_TAG_RE.lastIndex = 0;
@@ -849,7 +865,8 @@ export async function generateReply(
   // already on is a no-op.
   const { reply: afterVoice, voiceOn } = extractVoiceOn(raw);
   const { reply: afterMood, mood } = extractMood(afterVoice);
-  const { reply, signal: traitSignal } = extractTraitSignal(afterMood);
+  const { reply: afterTrait, signal: traitSignal } = extractTraitSignal(afterMood);
+  const reply = stripLeakedTags(afterTrait);
   return { reply, mood, traitSignal, voiceOn: !spokenAloud && voiceOn };
 }
 
