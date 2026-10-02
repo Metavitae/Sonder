@@ -526,7 +526,9 @@ const GENDER_GRAMMAR_NOTE = (gender?: SonderGender, userGender?: UserGender) =>
       "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\") unless they " +
       "show it themselves (e.g. \"estoy cansada\"); then match it. ") +
   "Whenever you do write in Spanish, write it the way a Mexican speaker " +
-  "naturally would, never a literal translation from English. None of this " +
+  "naturally would, never a literal translation from English. Keep it warm " +
+  "and everyday, never vulgar or crude, and no words with double meanings " +
+  "(no albures). None of this " +
   "is a reason to switch to Spanish when the user writes in English.";
 
 const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
