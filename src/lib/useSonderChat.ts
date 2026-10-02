@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { pickColdStartMessage } from "./coldStartMessages";
 import type { MistColor } from "./mistAtlas";
 import { moodToMist } from "./moodToMist";
-import { nowMs } from "./testClock";
 import { takeSightSummary } from "./sightReading";
 import { currentWeatherSummary, localTimeLabel } from "./localContext";
 import { currentSonderGender } from "./voicePreference";
@@ -81,7 +80,7 @@ type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal; voi
 // Sonder's reply as a diary entry: dated, in the ink of the feeling it came
 // with (no mood tag → the neutral default, same as the mist's).
 function sonderEntry(text: string, mood: Mood | undefined): ChatMessage {
-  return { role: "sonder", text, at: nowMs(), ink: moodToMist(mood ?? DEFAULT_MOOD).color };
+  return { role: "sonder", text, at: Date.now(), ink: moodToMist(mood ?? DEFAULT_MOOD).color };
 }
 
 async function requestChat(
@@ -343,7 +342,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
     if (isCrisisMessage(text)) {
       setMessages((prev) => [
         ...prev,
-        { role: "user", text, at: nowMs() },
+        { role: "user", text, at: Date.now() },
         sonderEntry(crisisResponseFor(text), DEFAULT_MOOD),
       ]);
       setMood(DEFAULT_MOOD);
@@ -364,7 +363,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
     let historyForRequest: ChatMessage[] = [];
     setMessages((prev) => {
       historyForRequest = prev;
-      return [...prev, { role: "user", text, at: nowMs() }];
+      return [...prev, { role: "user", text, at: Date.now() }];
     });
     await replyTo(text, historyForRequest, {
       sessionOpening,
@@ -393,7 +392,7 @@ export function useSonderChat(onVoiceOn?: () => void) {
     if (loadPromiseRef.current) {
       await loadPromiseRef.current;
     }
-    const at = nowMs();
+    const at = Date.now();
     let historyForRequest: ChatMessage[] = [];
     setMessages((prev) => {
       historyForRequest = prev;

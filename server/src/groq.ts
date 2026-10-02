@@ -121,16 +121,6 @@ const RESPONSE_VARIETY_INSTRUCTION =
   "moments that are actually heavy or ambiguous, not as a reflex on " +
   "every single turn regardless of content.";
 
-// Founder, 2026-09-30 (filming the footage): replies were 60-80 words of
-// advice, spilling onto a second page. A diary writes back a few lines.
-// Heavy moments and the crisis protocol are exempt from the length cap.
-const REPLY_LENGTH_NOTE =
-  "This is a diary, and you write back a few lines on its page. Keep each " +
-  "reply to one to three short sentences, about 40 words at most. Don't " +
-  "give tips, steps or how-to advice unless they ask for it; be with what " +
-  "they wrote instead. Only go longer when the moment is truly heavy, when " +
-  "they ask you for more, or when the crisis guidance applies.";
-
 // "Sonder - CC - Direct Instructions - Idle-line voice guidance, EN+ES
 // (2026-09-29)": when Sonder is simply there — dozing, or answering a
 // message with nothing in it (keyboard mashing) — it came across as an
@@ -835,8 +825,6 @@ export async function generateReply(
           (headphonesConnected ? "\n\n" + HEADPHONES_GUIDANCE : "") +
           "\n\n" +
           RESPONSE_VARIETY_INSTRUCTION +
-          "\n\n" +
-          REPLY_LENGTH_NOTE +
           "\n\n" +
           EMPTY_MESSAGE_NOTE +
           "\n\n" +
