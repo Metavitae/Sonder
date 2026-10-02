@@ -503,10 +503,14 @@ export type UserGender = "female" | "male";
 
 // Complete Reference §11 (founder, 2026-09-25: make it a written rule, not
 // something the model happens to do): mirror the user's language.
+// Founder, 2026-10-02: the old wording ended "Never default to English
+// because it's easier", and with the Spanish-only gender note right after it,
+// English messages were getting Spanish replies (7 of 7 on the live server).
 const LANGUAGE_MIRROR_NOTE =
-  "Always reply in the language the user is writing in right now, starting " +
-  "with their very first message. If they switch languages, or mix them, " +
-  "follow their lead. Never default to English because it's easier.";
+  "Reply in the same language as the user's latest message: English gets " +
+  "English, Spanish gets Spanish, starting with their very first message. " +
+  "If they switch languages, switch with them; if they mix them, follow " +
+  "their lead.";
 
 const GENDER_GRAMMAR_NOTE = (gender?: SonderGender, userGender?: UserGender) =>
   (gender
@@ -521,8 +525,9 @@ const GENDER_GRAMMAR_NOTE = (gender?: SonderGender, userGender?: UserGender) =>
     : "The user chose not to state their gender. In Spanish, phrase things about them " +
       "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\") unless they " +
       "show it themselves (e.g. \"estoy cansada\"); then match it. ") +
-  "Write Spanish the way a Mexican speaker naturally would, never a " +
-  "literal translation from English.";
+  "Whenever you do write in Spanish, write it the way a Mexican speaker " +
+  "naturally would, never a literal translation from English. None of this " +
+  "is a reason to switch to Spanish when the user writes in English.";
 
 const LOCAL_CONTEXT_NOTE = ({ localTime, weather }: LocalContext) =>
   "What's true around the user right now: " +
