@@ -15,6 +15,7 @@
 // Founder, 2026-09-28: Sonder is the diary itself, so the lines that made it
 // sound like a houseguest in the phone ("Mi casa es su device", "those
 // folders") were rewritten in the diary's voice — pages, ink, coffee stains.
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { g, say } from "./i18n";
 type ColdStartMessage = { text: () => string; weight: number };
 
@@ -39,12 +40,32 @@ const COLD_START_MESSAGES: ColdStartMessage[] = [
   { text: () => say("Okay, okay, I'm coming — just pretend you didn't see any of that.", "Ya voy, ya voy. Haz como que no viste nada."), weight: RARE_WEIGHT },
 ];
 
+// Founder, 2026-10-01: random, but never repeating. The last RECENT_COUNT
+// lines used are skipped (about half the pool, so it still feels random),
+// and remembered across launches — a wait-line often shows once per visit.
+const RECENT_COUNT = 7;
+const RECENT_KEY = "sonder_cold_start_recent_v1";
+let recent: number[] = [];
+AsyncStorage.getItem(RECENT_KEY)
+  .then((raw) => {
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) recent = parsed.filter((n) => typeof n === "number");
+  })
+  .catch(() => {});
+
 export function pickColdStartMessage(): string {
-  const totalWeight = COLD_START_MESSAGES.reduce((sum, m) => sum + m.weight, 0);
+  const pool = COLD_START_MESSAGES.map((m, i) => ({ m, i })).filter(({ i }) => !recent.includes(i));
+  const totalWeight = pool.reduce((sum, { m }) => sum + m.weight, 0);
   let roll = Math.random() * totalWeight;
-  for (const m of COLD_START_MESSAGES) {
-    roll -= m.weight;
-    if (roll <= 0) return m.text();
+  let chosen = pool[pool.length - 1];
+  for (const entry of pool) {
+    roll -= entry.m.weight;
+    if (roll <= 0) {
+      chosen = entry;
+      break;
+    }
   }
-  return COLD_START_MESSAGES[COLD_START_MESSAGES.length - 1].text();
+  recent = [...recent, chosen.i].slice(-RECENT_COUNT);
+  AsyncStorage.setItem(RECENT_KEY, JSON.stringify(recent)).catch(() => {});
+  return chosen.m.text();
 }
