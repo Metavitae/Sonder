@@ -192,6 +192,16 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, linesPerPage, measureTick, hand, textScale]);
   const lastIndex = pages.length - 1;
+  // Founder, 2026-10-01: when Sonder's writing fills a page to the very
+  // bottom, the fresh page added for the next line used to take the reader
+  // straight there (keyboard and all) about a second after Sonder wrote —
+  // so Sonder's words vanished from view. Now the book rests on the page
+  // Sonder just filled; the fresh page waits behind » until you go to write.
+  const lastEntry = entries[entries.length - 1];
+  const restIndex =
+    lastIndex > 1 && pages[lastIndex].length === 0 && lastEntry?.role === "sonder"
+      ? lastIndex - 1
+      : lastIndex;
   // Sonder's feeling as of the end of each page: its last line's ink there,
   // or carried over from before when Sonder wrote nothing on that page.
   const pageFeelings = useMemo(() => {
@@ -258,7 +268,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
 
   // --- Turning pages.
   const listRef = useRef<FlatList<DiaryRow[]>>(null);
-  const indexRef = useRef(lastIndex);
+  const indexRef = useRef(restIndex);
   const atLatestRef = useRef(true);
   const setIndex = useCallback(
     (i: number) => {
@@ -272,6 +282,11 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     },
     [lastIndex, onLatestChange, onViewedFeelingChange, pageFeelings]
   );
+  // Opening on a page Sonder filled (see restIndex): show » for the fresh page.
+  useEffect(() => {
+    setIndex(indexRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const goToLatest = useCallback(() => {
     listRef.current?.scrollToIndex({ index: lastIndex, animated: true });
     setIndex(lastIndex);
@@ -295,34 +310,34 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
   // disappeared left the book stranded halfway between two pages. Now any
   // change in the page count re-seats a reader who was on the latest page
   // exactly on the new last page (animated only when moving forward).
-  const prevLastRef = useRef(lastIndex);
+  const prevRestRef = useRef(restIndex);
   // Founder, 2026-09-30 (footage): on opening, the pages are first cut
   // before the handwriting is measured, then re-cut — that used to play a
   // page turn on every launch and could stop it part-way, the next page
   // peeking in. Only real new writing turns the page; anything else jumps.
   const prevCountRef = useRef(entries.length);
   useEffect(() => {
-    const prevLast = prevLastRef.current;
+    const prevRest = prevRestRef.current;
     const newWriting = entries.length > prevCountRef.current;
     prevCountRef.current = entries.length;
-    if (lastIndex === prevLast) return;
-    prevLastRef.current = lastIndex;
-    const wasAtLatest = indexRef.current >= prevLast;
+    if (restIndex === prevRest) return;
+    prevRestRef.current = restIndex;
+    const wasAtLatest = indexRef.current >= prevRest;
     // Real bug (8T, 2026-10-01 footage): on opening, a page added by the
     // re-cut while the handwriting was still being measured (not `ready`)
     // left the reader one page short of the latest. A reader on the latest
     // page now always follows it; only new writing, once ready, animates.
     if (wasAtLatest) {
       listRef.current?.scrollToOffset({
-        offset: lastIndex * pageWidth,
-        animated: ready && newWriting && lastIndex > prevLast,
+        offset: restIndex * pageWidth,
+        animated: ready && newWriting && restIndex > prevRest,
       });
-      setIndex(lastIndex);
+      setIndex(restIndex);
     } else {
       setIndex(Math.min(indexRef.current, lastIndex));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastIndex, ready, setIndex, pageWidth]);
+  }, [restIndex, lastIndex, ready, setIndex, pageWidth]);
 
   // Real bug (on the POCO, 2026-09-28): after a photo, Sonder's reply spilled
   // onto a new page and the book stopped halfway between two pages — the
@@ -585,7 +600,9 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                   submitBehavior="submit"
                   returnKeyType="send"
                   onSubmitEditing={onSend}
-                  autoFocus
+                  // Not on a fresh page Sonder's writing made: it would pop
+                  // the keyboard up over what Sonder just wrote.
+                  autoFocus={restIndex === lastIndex}
                   cursorColor={userInk(paper)}
                   selectionColor="rgba(43,35,28,0.25)"
                   accessibilityLabel={t("Write in the diary", "Escribe en el diario")}
@@ -681,7 +698,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
             keyExtractor={(_, i) => String(i)}
             renderItem={renderPage}
             getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
-            initialScrollIndex={lastIndex}
+            initialScrollIndex={restIndex}
             onMomentumScrollEnd={handleMomentumEnd}
             onScroll={(e) => {
               offsetRef.current = e.nativeEvent.contentOffset.x;
