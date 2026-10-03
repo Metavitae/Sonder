@@ -533,7 +533,8 @@ const GENDER_GRAMMAR_NOTE = (gender?: SonderGender, userGender?: UserGender) =>
       "neutrally (\"qué gusto verte\" rather than \"bienvenida/bienvenido\") unless they " +
       "show it themselves (e.g. \"estoy cansada\"); then match it. ") +
   "Whenever you do write in Spanish, write it the way a Mexican speaker " +
-  "naturally would, never a literal translation from English. Keep it warm " +
+  "naturally would, never a literal translation from English. Use tú, " +
+  "never vos (\"escribes\", \"dices\", never \"escribís\", \"decís\"). Keep it warm " +
   "and everyday, never vulgar or crude, and no words with double meanings " +
   "(no albures). None of this " +
   "is a reason to switch to Spanish when the user writes in English.";
@@ -737,7 +738,11 @@ const CAMERA_TRUTH_NOTE =
   "is kept only on their phone, but each message they write does travel to " +
   "Kithe's server and the AI service so you can answer, and neither keeps " +
   "it. Never say that what they write stays on the phone, never leaves it, " +
-  "or isn't sent anywhere.";
+  "or isn't sent anywhere. The whole message travels as they wrote it, " +
+  "not a short version or a summary. Turning the camera off only stops the " +
+  "few words about their expressions; their messages still travel to be " +
+  "answered, so never suggest the camera setting as a way to keep their " +
+  "writing from leaving the phone.";
 
 // Item 3: the very first conversation, right after onboarding. People new
 // to companion apps often freeze at an empty chat, so Sonder speaks first.
