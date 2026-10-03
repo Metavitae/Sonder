@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import type { ChatCompletionCreateParamsNonStreaming } from "groq-sdk/resources/chat/completions";
 import type { LibraryExample } from "./library.js";
 
 // GROQ_MODEL is deliberately configurable, not hardcoded: the canonical
@@ -603,8 +604,7 @@ export async function updateNotes(
   const pages = turns
     .map((t) => `${t.role === "user" ? "Them" : "You (Sonder)"}: ${t.text}`)
     .join("\n");
-  const completion = await getClient().chat.completions.create({
-    model: MODEL,
+  const completion = await createChat({
     temperature: 0.3,
     messages: [
       {
@@ -690,6 +690,8 @@ export async function describePhoto(jpegBase64: string, spanish: boolean): Promi
 // logs — only usage metadata that holds no content
 // (console.groq.com/docs/your-data, re-read 2026-09-29). If ZDR is ever
 // switched off, the 30-day sentence must come back.
+// Cloudflare (backup since 2026-10-03, see createChat) stores nothing
+// unless a storage service is attached, and none is.
 const CAMERA_TRUTH_NOTE =
   "If they ask whether you can see them, about the camera, or what happens " +
   "to what you see, answer plainly and truthfully, in your own voice and " +
@@ -705,9 +707,9 @@ const CAMERA_TRUTH_NOTE =
   "answer that message.\n" +
   "- Kithe (the people who made you) keeps NOTHING: no words, no pictures, no " +
   "logs. Kithe's server reads the message, you answer, and it's gone.\n" +
-  "- The AI service that helps you write (Groq) doesn't keep it either: it " +
-  "reads the message to help you answer and keeps nothing of it, no logs " +
-  "of what was said.\n" +
+  "- The AI service that helps you write (Groq, or Cloudflare as a backup " +
+  "when Groq is busy) doesn't keep it either: it reads the message to help " +
+  "you answer and keeps nothing of it, no logs of what was said.\n" +
   "- The diary itself lives only on their phone.\n" +
   "Always cover all of it: yes plus how to turn it off; only expressions, " +
   "the picture stays on the phone; the few words DO leave the phone with " +
@@ -813,8 +815,7 @@ export async function generateReply(
   // Sonder's voice entirely.
   const TEMPERATURE = 0.6;
 
-  const completion = await getClient().chat.completions.create({
-    model: MODEL,
+  const completion = await createChat({
     temperature: TEMPERATURE,
     messages: [
       {
@@ -889,6 +890,71 @@ function getClient(): Groq {
   return client;
 }
 
+// Founder, 2026-10-03: Cloudflare Workers AI as the backup when Groq's free
+// allowance runs out (429) or Groq is down (5xx / no connection). Same model
+// (gpt-oss-120b), so the same Sonder voice; Cloudflare doesn't train on it
+// and stores it only if a storage service is attached, which none is
+// (developers.cloudflare.com/workers-ai/platform/privacy, read 2026-10-03).
+// Text only — photos stay Groq-only (describePhoto). Off unless both env
+// vars are set.
+const CF_MODEL = "@cf/openai/gpt-oss-120b";
+// After a 429, skip Groq for this long instead of hitting it again on
+// every message.
+const GROQ_COOLDOWN_MS = 60_000;
+let groqResumeAt = 0;
+
+type ChatParams = Omit<ChatCompletionCreateParamsNonStreaming, "model">;
+type ChatResult = { choices: { message?: { content?: string | null } }[] };
+
+function cloudflareConfigured(): boolean {
+  return !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+}
+
+async function cloudflareChat(params: ChatParams): Promise<ChatResult> {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      // Cloudflare's default output cap is small, and gpt-oss spends most
+      // of it reasoning first: replies came back empty (finish_reason
+      // "length") in 4 of 12 test calls, 2026-10-03. Groq's default is far
+      // higher, so this only evens them out.
+      body: JSON.stringify({ max_tokens: 4096, ...params, model: CF_MODEL }),
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Cloudflare ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return (await res.json()) as ChatResult;
+}
+
+async function createChat(params: ChatParams): Promise<ChatResult> {
+  if (cloudflareConfigured() && Date.now() < groqResumeAt) {
+    return cloudflareChat(params);
+  }
+  try {
+    // With a backup ready, don't let the SDK retry a 429 first (it waits
+    // and asks again, twice) — go straight to Cloudflare.
+    return await getClient().chat.completions.create(
+      { ...params, model: MODEL },
+      cloudflareConfigured() ? { maxRetries: 0 } : undefined
+    );
+  } catch (err) {
+    const limited = err instanceof Groq.APIError && err.status === 429;
+    const down =
+      err instanceof Groq.APIConnectionError ||
+      (err instanceof Groq.APIError && (err.status ?? 0) >= 500);
+    if (!(limited || down) || !cloudflareConfigured()) throw err;
+    if (limited) groqResumeAt = Date.now() + GROQ_COOLDOWN_MS;
+    console.warn(`[ai] Groq ${limited ? "at its limit" : "unavailable"}, using Cloudflare`);
+    return cloudflareChat(params);
+  }
+}
+
 // The line Sonder shows (and says) when it dozes off while the person is
 // quiet — a performed drift, it never really stops noticing (Part 22 item
 // 6). Written fresh each time in the quiet-presence voice; `recent` holds
@@ -900,8 +966,7 @@ export async function generateIdleLine(
   sonderGender: SonderGender | undefined,
   recent: string[]
 ): Promise<string> {
-  const completion = await getClient().chat.completions.create({
-    model: MODEL,
+  const completion = await createChat({
     temperature: 1,
     messages: [
       {

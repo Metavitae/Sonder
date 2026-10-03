@@ -15,3 +15,8 @@ services:
         sync: false
       - key: GROQ_MODEL
         sync: false
+      # Backup when Groq's free allowance runs out (see createChat in groq.ts).
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
