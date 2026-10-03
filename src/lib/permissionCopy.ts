@@ -23,8 +23,14 @@ export const LEVEL1_BUTTON_NOT_NOW = t("Not right now", "Ahorita no");
 // file is locked. Drafted in Sonder's own voice to match LEVEL1_ASK;
 // flagged in the Drive Log as needing a founder look, same as the Level 2
 // toggle-list content gap already on record.
+// Founder, 2026-10-03: "None of it is ever shared" wasn't true for the
+// camera — the few words about their expressions travel with each message
+// (src/lib/sightReading.ts). Founder's wording for that part. Of the other
+// senses, only location leaves the phone: approximate coordinates go to
+// Open-Meteo for the weather, never to Sonder's server. Voice-to-text was
+// never built, so the microphone sends nothing.
 export const PERMITS_EXPLANATION =
-  t("These are my senses — how I can be closer to you. None of it is ever shared with anyone.", "Estos son mis sentidos: así puedo estar más cerca de ti. Nada de esto se comparte con nadie, nunca.");
+  t("These are my senses — how I can be closer to you. I notice your expressions, like a smile or tired eyes, so I can understand you better. The picture never leaves your phone; only a few words describing what I see travel with your message, and nobody keeps them.", "Estos son mis sentidos: así puedo estar más cerca de ti. Noto tus expresiones, como una sonrisa o unos ojos cansados, para entenderte mejor. La imagen nunca sale de tu celular; solo unas pocas palabras que describen lo que veo viajan con tu mensaje, y nadie las guarda.");
 
 // Sharing panel is a separate screen/step — never blended into a Permits
 // moment. Scoped to Sonder's own use only (Part 45 Addendum, 2026-08-20):
