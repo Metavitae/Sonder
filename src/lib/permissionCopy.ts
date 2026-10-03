@@ -25,12 +25,12 @@ export const LEVEL1_BUTTON_NOT_NOW = t("Not right now", "Ahorita no");
 // toggle-list content gap already on record.
 // Founder, 2026-10-03: "None of it is ever shared" wasn't true for the
 // camera — the few words about their expressions travel with each message
-// (src/lib/sightReading.ts). Founder's wording for that part. Of the other
-// senses, only location leaves the phone: approximate coordinates go to
-// Open-Meteo for the weather, never to Sonder's server. Voice-to-text was
-// never built, so the microphone sends nothing.
+// (src/lib/sightReading.ts). Founder's wording for that part. Since
+// 2026-10-03 speaking to Sonder sends the recording once to be turned into
+// words (useVoiceNote.ts), so that's said too. Location: approximate
+// coordinates go to Open-Meteo for the weather, never to Sonder's server.
 export const PERMITS_EXPLANATION =
-  t("These are my senses — how I can be closer to you. I notice your expressions, like a smile or tired eyes, so I can understand you better. The picture never leaves your phone; only a few words describing what I see travel with your message, and nobody keeps them.", "Estos son mis sentidos: así puedo estar más cerca de ti. Noto tus expresiones, como una sonrisa o unos ojos cansados, para entenderte mejor. La imagen nunca sale de tu celular; solo unas pocas palabras que describen lo que veo viajan con tu mensaje, y nadie las guarda.");
+  t("These are my senses — how I can be closer to you. I notice your expressions, like a smile or tired eyes, so I can understand you better. The picture never leaves your phone; only a few words describing what I see travel with your message, and nobody keeps them. When you talk to me, your voice is turned into words the same way, and nobody keeps the recording.", "Estos son mis sentidos: así puedo estar más cerca de ti. Noto tus expresiones, como una sonrisa o unos ojos cansados, para entenderte mejor. La imagen nunca sale de tu celular; solo unas pocas palabras que describen lo que veo viajan con tu mensaje, y nadie las guarda. Cuando me hablas, tu voz se convierte en palabras igual, y nadie guarda la grabación.");
 
 // Sharing panel is a separate screen/step — never blended into a Permits
 // moment. Scoped to Sonder's own use only (Part 45 Addendum, 2026-08-20):

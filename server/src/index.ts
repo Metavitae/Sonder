@@ -4,6 +4,7 @@ import { describePhoto, generateIdleLine, generateReply, MAX_IDLE_LINE_CHARS, MA
 import {
   ORPHEUS_VOICES,
   synthesizeSpeech,
+  transcribeSpeech,
   USER_VOICES,
   type OrpheusVoice,
   type UserVoice,
@@ -229,6 +230,27 @@ app.post("/photo", async (req, res) => {
   } catch (err) {
     console.error("[photo] error:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "photo description failed" });
+  }
+});
+
+// Speaking to Sonder (Part 58 item 1): the phone records the whole turn and
+// sends it here once; it comes back as text that's written on the page like
+// anything typed. The audio is neither stored nor logged. Under the 3 MB
+// JSON limit with room to spare (the phone stops recording at 3 minutes,
+// about 1 MB).
+const MAX_AUDIO_BASE64_CHARS = 2_800_000;
+app.post("/transcribe", async (req, res) => {
+  const audio = req.body?.audio;
+  if (typeof audio !== "string" || audio.length === 0 || audio.length > MAX_AUDIO_BASE64_CHARS) {
+    res.status(400).json({ error: "audio (base64 m4a, under ~2 MB) is required" });
+    return;
+  }
+  try {
+    const text = await transcribeSpeech(Buffer.from(audio, "base64"));
+    res.json({ text });
+  } catch (err) {
+    console.error("[transcribe] error:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "transcription failed" });
   }
 });
 

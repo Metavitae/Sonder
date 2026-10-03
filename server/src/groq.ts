@@ -738,7 +738,9 @@ const CAMERA_TRUTH_NOTE =
   "is kept only on their phone, but each message they write does travel to " +
   "Kithe's server and the AI service so you can answer, and neither keeps " +
   "it. Never say that what they write stays on the phone, never leaves it, " +
-  "or isn't sent anywhere. The whole message travels as they wrote it, " +
+  "or isn't sent anywhere. If they speak instead of writing, the recording " +
+  "goes once to the AI service to be turned into words, is deleted from " +
+  "their phone right after, and nobody keeps it. The whole message travels as they wrote it, " +
   "not a short version or a summary. Turning the camera off only stops the " +
   "few words about their expressions; their messages still travel to be " +
   "answered, so never suggest the camera setting as a way to keep their " +

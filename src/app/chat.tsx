@@ -42,6 +42,7 @@ import { PAPER_STYLE, RIBBON_RED, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
 import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
+import { useVoiceNote } from "../lib/useVoiceNote";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -368,6 +369,20 @@ export default function ChatScreen() {
     );
   };
 
+  // Speaking instead of writing (Faro, Part 58 item 1): what they said is
+  // sent exactly like something typed.
+  const voiceNote = useVoiceNote((text) => {
+    noteActivity();
+    send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
+    jumpToLatest();
+  });
+  const handleVoiceNote = () => {
+    if (isWaiting && voiceNote.phase === "idle") return;
+    noteActivity();
+    Keyboard.dismiss();
+    voiceNote.toggle();
+  };
+
   const handleAddPhoto = () => {
     if (isWaiting) return;
     Alert.alert(t("Add a photo", "Pegar una foto"), undefined, [
@@ -547,6 +562,7 @@ export default function ChatScreen() {
           onDeleteEntry={confirmDelete}
           hand={hand}
           textScale={textScale}
+          voiceNote={{ phase: voiceNote.phase, elapsedMs: voiceNote.elapsedMs, onPress: handleVoiceNote }}
           onPreviewFeeling={setPreviewColor}
           onViewedFeelingChange={setPageFeeling}
         />

@@ -39,6 +39,7 @@ import { colorName, FEELING_ORDER, feelingNote, feelingWords } from "../../lib/f
 import { type Bookmark, bookmarkId } from "../../lib/diaryBookmarks";
 import type { MistColor } from "../../lib/mistAtlas";
 import { t } from "../../lib/i18n";
+import type { VoiceNotePhase } from "../../lib/useVoiceNote";
 
 // One ruled line. Every row — a line of writing, a date, the line being
 // typed — is exactly this tall, so the writing always sits on the rules.
@@ -91,7 +92,15 @@ type Props = {
   onViewedFeelingChange?: (color: MistColor | null) => void;
   // The user's text-size choice (diaryTextSize.ts): 1, 1.2 or 1.4.
   textScale: number;
+  // Speaking instead of writing (useVoiceNote.ts): the microphone sits where
+  // the send mark goes, whenever nothing has been written yet.
+  voiceNote?: { phase: VoiceNotePhase; elapsedMs: number; onPress: () => void };
 };
+
+function formatElapsed(ms: number) {
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
 
 function lineStyle(role: "user" | "sonder", userHand: TextStyle, sonderHand: TextStyle) {
   return role === "sonder" ? sonderHand : userHand;
@@ -118,6 +127,7 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
     onPreviewFeeling,
     onViewedFeelingChange,
     textScale,
+    voiceNote,
   },
   ref
 ) {
@@ -618,6 +628,37 @@ export const DiaryBook = forwardRef<DiaryBookHandle, Props>(function DiaryBook(
                     <Text style={[styles.sendText, ls.send, { color: sonderInk(feeling, paper) }]}>↵</Text>
                   </Pressable>
                 )}
+                {input.trim().length === 0 && voiceNote && (
+                  <Pressable
+                    onPress={voiceNote.onPress}
+                    disabled={voiceNote.phase === "transcribing"}
+                    style={styles.mic}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      voiceNote.phase === "recording"
+                        ? t("Stop and send", "Terminar y enviar")
+                        : t("Speak instead of writing", "Hablar en vez de escribir")
+                    }
+                  >
+                    {voiceNote.phase === "recording" ? (
+                      <View style={styles.micRecording}>
+                        <Text style={[styles.micTime, { color: paperStyle.faint }]}>
+                          {formatElapsed(voiceNote.elapsedMs)}
+                        </Text>
+                        <View style={styles.micDot} />
+                      </View>
+                    ) : voiceNote.phase === "transcribing" ? (
+                      <Text style={[styles.sendText, ls.send, { color: paperStyle.faint }]}>…</Text>
+                    ) : (
+                      <View style={styles.micIcon}>
+                        <View style={[styles.micHead, { borderColor: sonderInk(feeling, paper) }]} />
+                        <View style={[styles.micStem, { backgroundColor: sonderInk(feeling, paper) }]} />
+                        <View style={[styles.micBase, { backgroundColor: sonderInk(feeling, paper) }]} />
+                      </View>
+                    )}
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -795,6 +836,14 @@ const styles = StyleSheet.create({
   },
   photo: { flex: 1 },
   sendText: { fontSize: 22, fontWeight: "700" },
+  mic: { position: "absolute", right: 0, bottom: 6 },
+  micIcon: { width: 22, height: 26, alignItems: "center" },
+  micHead: { width: 10, height: 16, borderRadius: 5, borderWidth: 2 },
+  micStem: { width: 2, height: 5 },
+  micBase: { width: 10, height: 2, borderRadius: 1 },
+  micRecording: { flexDirection: "row", alignItems: "center", height: 26 },
+  micTime: { fontSize: 13, marginRight: 6 },
+  micDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#c0392b" },
   // The ribbon hangs from the page's top edge, inside the right margin so
   // it never covers writing. Unmarked pages show only a faint stub to tap.
   ribbonHit: { position: "absolute", top: 0, right: 5, width: 16, alignItems: "center" },
