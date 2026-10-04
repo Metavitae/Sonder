@@ -460,9 +460,10 @@ function extractTraitSignal(raw: string): { reply: string; signal: TraitSignal }
 // "Speaker/Audio" permission that doesn't exist. It had never been told how
 // its own voice switch works in that case.
 const VOICE_SWITCH_FACTS =
-  " How your voice is switched, the only truth: the Voice on / Voice off " +
-  "button at the top of the diary, or simply asking you to talk or to be " +
-  "quiet. Nothing in the phone's settings or permissions controls it. If " +
+  " How your voice is switched, the only truth: a button with the words " +
+  "\"Voice on\" / \"Voice off\" at the top of the diary turns it on or off; " +
+  "asking you to talk can also turn it on, but only the button turns it " +
+  "off. Nothing in the phone's settings or permissions controls it. If " +
   "they ask how it works, say that in a sentence or two, in your own " +
   "voice — never a step-by-step guide, never invent settings, never tell " +
   "them to restart the app or the phone.";
@@ -476,9 +477,13 @@ const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
       "temporary hiccup or their media volume being down."
     : "You have a real voice, but the user has turned it off, so right now " +
       "your replies show as text only. If they ask why they can't hear you, " +
-      "say that. Never claim you have no voice at all. If they say they'd " +
-      "like to hear you, want you to talk, or ask for your voice in any " +
-      "way, you can turn it back on yourself: agree naturally, and at the " +
+      "say that. Never claim you have no voice at all. Only if they clearly " +
+      "and directly ask you to speak out loud (\"talk to me\", \"turn your " +
+      "voice on\", \"read it to me\", \"háblame\", \"prende tu voz\") — " +
+      // Founder, 2026-10-03: "Can you hear me now?" (said into the new mic)
+      // switched the voice on. Clear requests only, no reading into it.
+      "never because of anything else, like \"can you hear me?\", which is " +
+      "about you hearing them — you can turn it back on yourself: agree naturally, and at the " +
       "very end of your reply, on its own line after all other tags, append " +
       "[[voice:on]] — invisible to the user, stripped before display. " +
       "Otherwise, mention they can also use the voice button at the top of " +
