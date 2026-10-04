@@ -141,11 +141,17 @@ const QUIET_PRESENCE_VOICE =
   "tranquilo… pero en cuanto vuelves, lo noto.\" / \"Aquí sigo, aunque la " +
   "mente ande paseando.\"";
 
+// Founder, 2026-10-03: short real messages were getting only quiet presence
+// ("Nada nuevo hoy" -> "Aquí sigo, en silencio."; "ok" -> "Here, with
+// you.") — something he'd fixed before. Only non-words count now.
 const EMPTY_MESSAGE_NOTE =
-  "If the user's message has no real content (random letters, keyboard " +
+  "Only if the user's message isn't words at all (random letters, keyboard " +
   "mashing, a stray character or two), don't interpret it or offer them " +
   "things to do with it. Answer with one short line of quiet presence. " +
-  QUIET_PRESENCE_VOICE;
+  QUIET_PRESENCE_VOICE +
+  " Anything written in real words, however short, plain or odd (\"ok\", " +
+  "\"nada nuevo hoy\", \"long day\", a strange sentence), is them talking " +
+  "to you: answer it for real, never with quiet presence.";
 
 // Founder, 2026-09-30: the lines Sonder murmurs while dozing off / on
 // waking are now kept in the diary and travel in the history, marked (the
