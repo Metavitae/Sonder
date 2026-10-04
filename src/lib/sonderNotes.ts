@@ -86,3 +86,28 @@ export async function maybeUpdateSonderNotes(messages: ChatMessage[]): Promise<v
     updating = false;
   }
 }
+
+// Founder, 2026-10-03: a call disappears when it ends, but Sonder keeps what
+// mattered. Its lines go into one notes rewrite, marked as spoken, and are
+// then dropped — the diary's own count is left as it was.
+export async function noteCall(turns: { role: "user" | "sonder"; text: string }[]): Promise<void> {
+  if (!API_BASE_URL || turns.length === 0) return;
+  const stored = await load();
+  try {
+    const res = await fetch(`${API_BASE_URL}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notes: stored.notes,
+        turns: turns.map((t) => ({ role: t.role, text: `(on a call) ${t.text}` })),
+        userGender: await currentUserGender(),
+      }),
+    });
+    if (!res.ok) throw new Error(`server responded ${res.status}`);
+    const data = (await res.json()) as { notes?: unknown };
+    if (typeof data.notes !== "string") throw new Error("no notes in response");
+    save({ ...(await load()), notes: data.notes });
+  } catch (err) {
+    console.log("[notes] call note failed", err instanceof Error ? err.message : String(err));
+  }
+}

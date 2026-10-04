@@ -134,6 +134,12 @@ function ensureAudioMode(): Promise<void> {
 // configured at all — so this always falls through to the free, unlimited
 // native fallback rather than silently doing nothing.
 export function useSpeak() {
+  return useSpeakControls().speak;
+}
+
+// speak plus stop — the call (useSonderCall.ts) needs to cut Sonder off when
+// the user taps Talk mid-sentence, like on a phone.
+export function useSpeakControls() {
   const activePlayerRef = useRef<AudioPlayer | null>(null);
   // Real bug found 2026-08-17 (founder live test, Part 31 verification):
   // removing a superseded AudioPlayer only stops that *player* — the
@@ -213,6 +219,14 @@ export function useSpeak() {
     Speech.speak(text);
   }, []);
 
+  const stop = useCallback(() => {
+    generationRef.current++;
+    activePlayerRef.current?.remove();
+    activePlayerRef.current = null;
+    Speech.stop();
+    stopLocalVoice();
+  }, []);
+
   useEffect(() => {
     return () => {
       vlog("useSpeak unmount cleanup, removing", activePlayerRef.current?.id);
@@ -222,5 +236,5 @@ export function useSpeak() {
     };
   }, []);
 
-  return speak;
+  return { speak, stop };
 }

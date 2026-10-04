@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import { FogLogoSequence } from "../../components/onboarding/FogLogoSequence";
 import type { MistColor } from "../../lib/mistAtlas";
 import { useOnboarding } from "../../lib/onboardingContext";
 import { t } from "../../lib/i18n";
+import { currentSonderName, DEFAULT_SONDER_NAME, MAX_SONDER_NAME_CHARS, setSonderName } from "../../lib/sonderName";
 
 // Arbitrary starting point for the wheel picker's initial position — old
 // enough that it clears the 18+ gate by default, so a user who never
@@ -76,15 +77,21 @@ export default function SetupScreen() {
   const canContinue =
     isAdult && emailValid && state.userColor !== null && state.sonderColor !== null;
 
+  const [sonderNameDraft, setSonderNameDraft] = useState(DEFAULT_SONDER_NAME);
+  useEffect(() => {
+    currentSonderName().then(setSonderNameDraft);
+  }, []);
+
   const handleContinue = useCallback(() => {
     if (!canContinue) return;
+    setSonderName(sonderNameDraft);
     // Cast: same stale-local-typegen gap noted in index.tsx's chatLink —
     // .expo/types/router.d.ts only regenerates against a live dev server,
     // so a route this new typechecks against a stale union locally even
     // though it resolves fine at runtime. Part 52 (2026-08-25): Subscriptions
     // now comes right after Registration, before the permits/sharing panels.
     router.push("/onboarding/subscriptions" as never);
-  }, [canContinue]);
+  }, [canContinue, sonderNameDraft]);
 
   // Holds off rendering until the persisted state (if any) is loaded, so a
   // resumed mid-flow session doesn't flash the wheel/pickers back to their
@@ -166,6 +173,23 @@ export default function SetupScreen() {
           }}
           idPrefix="sonder"
         />
+        {
+          // Founder, 2026-10-03: users can rename Sonder — here, or later by
+          // asking it. One compact line; the page must still fit unscrolled.
+        }
+        <View style={styles.nameRow}>
+          <Text style={styles.nameLabel}>{t("Its name:", "Su nombre:")}</Text>
+          <TextInput
+            style={styles.nameInput}
+            value={sonderNameDraft}
+            onChangeText={setSonderNameDraft}
+            maxLength={MAX_SONDER_NAME_CHARS}
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+            accessibilityLabel={t("Sonder's name", "Nombre de Sonder")}
+          />
+        </View>
       </View>
 
       <View style={styles.footer}>
@@ -201,6 +225,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
     paddingHorizontal: 14,
     paddingVertical: 8,
+    textAlign: "center",
+  },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  nameLabel: { color: "#F0E6FF", fontSize: 15, fontWeight: "600" },
+  nameInput: {
+    color: "#F0E6FF",
+    fontSize: 15,
+    minWidth: 140,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(240,230,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     textAlign: "center",
   },
   footer: { alignItems: "center", paddingTop: 8, paddingHorizontal: 24 },

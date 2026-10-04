@@ -23,7 +23,7 @@ import { notifyDreaming } from "../lib/dreamNotify";
 import { useHeadphonesConnected } from "../lib/audioRoute";
 import { useSonderVoice } from "../lib/voicePreference";
 import { useSpeakReplies } from "../lib/useSpeakReplies";
-import { useSpeak } from "../lib/speak";
+import { useSpeakControls } from "../lib/speak";
 import { prepareLocalVoice } from "../lib/localVoice";
 import { useCharacterTraits } from "../lib/characterTraits";
 import { FilamentMist } from "../components/FilamentMist";
@@ -42,7 +42,7 @@ import { PAPER_STYLE, RIBBON_RED, sonderInk, userInk } from "../lib/diaryInk";
 import { type Bookmark, useDiaryBookmarks } from "../lib/diaryBookmarks";
 import { formatDiaryDate } from "../lib/diaryLayout";
 import { describeDiaryPhoto, pickDiaryPhoto } from "../lib/diaryPhotos";
-import { useVoiceNote } from "../lib/useVoiceNote";
+import { useSonderCall } from "../lib/useSonderCall";
 
 // Item 6's "performed only" dreaming state forces the mist to a slow,
 // dim pulse regardless of the last real mood — dimming via a separate
@@ -142,7 +142,7 @@ export default function ChatScreen() {
   // on it when this is the first turn of the session.
   const presence = usePresence();
 
-  const speak = useSpeak();
+  const { speak, stop: stopSpeaking } = useSpeakControls();
 
   // Item 6 — performed sleep/dreaming bit. `noteActivity` marks the moment
   // as real interaction (resets the idle clock, and if we were dreaming,
@@ -369,18 +369,29 @@ export default function ChatScreen() {
     );
   };
 
-  // Speaking instead of writing (Faro, Part 58 item 1): what they said is
-  // sent exactly like something typed.
-  const voiceNote = useVoiceNote((text) => {
-    noteActivity();
-    send(text, presence, headphonesConnected, traitWeights ?? undefined, voiceEnabled);
-    jumpToLatest();
+  // A call with Sonder (founder, 2026-10-03): the mic is only for talking
+  // with Sonder; writing stays typed. Sonder sees the page — the recent
+  // entries and whatever they're writing right now, before it's sent.
+  const pageRef = useRef({ messages, input });
+  pageRef.current = { messages, input };
+  const call = useSonderCall({
+    getPage: () => {
+      const { messages: m, input: draft } = pageRef.current;
+      const recent = m
+        .slice(-12)
+        .map((e) => `${e.role === "user" ? "They wrote" : "You wrote"}: ${e.photo ? "[a photo]" : e.text}`)
+        .join("\n");
+      return draft.trim() ? `${recent}\nWriting right now, not sent yet: ${draft}` : recent;
+    },
+    speak: (text) => speak(text, voice),
+    stopSpeaking,
+    headphonesConnected,
+    traitWeights: traitWeights ?? undefined,
   });
-  const handleVoiceNote = () => {
-    if (isWaiting && voiceNote.phase === "idle") return;
+  const startCall = () => {
     noteActivity();
     Keyboard.dismiss();
-    voiceNote.toggle();
+    call.start();
   };
 
   const handleAddPhoto = () => {
@@ -435,7 +446,43 @@ export default function ChatScreen() {
         pointerEvents="none"
         style={[StyleSheet.absoluteFillObject, styles.dreamOverlay, dreamOverlayStyle]}
       />
-      <View style={[styles.topBar, { marginTop: insets.top }]}>
+      {call.phase !== "off" && (
+        <View style={[styles.callBar, { marginTop: insets.top }]}>
+          <Pressable
+            onPress={() => {
+              noteActivity();
+              call.talkOrSend();
+            }}
+            disabled={call.phase === "thinking"}
+            style={[styles.callTalk, call.phase === "recording" && styles.callTalkRecording]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              call.phase === "recording" ? t("Send", "Enviar") : t("Talk", "Hablar")
+            }
+          >
+            {call.phase === "recording" && <View style={styles.callDot} />}
+            <Text style={styles.callTalkText}>
+              {call.phase === "recording"
+                ? `${t("Tap to send", "Toca para enviar")}  ${formatCallTime(call.elapsedMs)}`
+                : call.phase === "thinking"
+                  ? "…"
+                  : t("Tap to talk", "Toca para hablar")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={call.end}
+            style={styles.callEnd}
+            accessibilityRole="button"
+            accessibilityLabel={t("End call", "Colgar")}
+          >
+            <Text style={styles.callEndText}>{t("End call", "Colgar")}</Text>
+          </Pressable>
+        </View>
+      )}
+      <View
+        style={[styles.topBar, { marginTop: insets.top }, call.phase !== "off" && styles.hidden]}
+        pointerEvents={call.phase !== "off" ? "none" : "auto"}
+      >
         {
           // Founder decision 2026-09-27: white page or brown page
           // ("like an adventurer's notebook"), the user's choice.
@@ -562,7 +609,7 @@ export default function ChatScreen() {
           onDeleteEntry={confirmDelete}
           hand={hand}
           textScale={textScale}
-          voiceNote={{ phase: voiceNote.phase, elapsedMs: voiceNote.elapsedMs, onPress: handleVoiceNote }}
+          onStartCall={call.phase === "off" ? startCall : undefined}
           onPreviewFeeling={setPreviewColor}
           onViewedFeelingChange={setPageFeeling}
         />
@@ -638,9 +685,47 @@ export default function ChatScreen() {
   );
 }
 
+function formatCallTime(ms: number) {
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   flex: { flex: 1 },
+  hidden: { opacity: 0 },
+  // The call bar sits over the top bar while a call is on, so it's always in
+  // reach, keyboard or not.
+  callBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: TOP_BAR,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    zIndex: 20,
+  },
+  callTalk: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#7CFFB2",
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  callTalkRecording: { backgroundColor: "#F0E6FF" },
+  callDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#c0392b", marginRight: 8 },
+  callTalkText: { color: "#000", fontSize: 14, fontWeight: "700" },
+  callEnd: {
+    backgroundColor: "#c0392b",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  callEndText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   topBar: {
     height: TOP_BAR,
     paddingHorizontal: 16,

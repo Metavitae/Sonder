@@ -128,6 +128,9 @@ function parseNotes(value: unknown): string | undefined {
     : undefined;
 }
 
+// The diary page a user has open during a call — enough for one page.
+const MAX_CALL_PAGE_CHARS = 4000;
+
 app.post("/chat", async (req, res) => {
   // First-conversation opener (2026-09-14 proactive instructions, item 3):
   // Sonder speaks first, so there's no user message to require.
@@ -159,7 +162,14 @@ app.post("/chat", async (req, res) => {
   const traitWeights = parseTraitWeights(req.body?.traits);
   // Voice on/off toggle — only an explicit false means off, so builds that
   // predate the toggle (and never send it) keep the voice-on default.
-  const spokenAloud = req.body?.voice !== false;
+  // A voice call (founder, 2026-10-03) is always spoken, whatever the toggle.
+  const call =
+    req.body?.call === true
+      ? { page: typeof req.body?.page === "string" ? req.body.page.slice(0, MAX_CALL_PAGE_CHARS) : "" }
+      : undefined;
+  const spokenAloud = call ? true : req.body?.voice !== false;
+  const rawName = typeof req.body?.sonderName === "string" ? req.body.sonderName.trim() : "";
+  const sonderName = rawName && rawName.length <= 24 ? rawName : undefined;
   // Sonder's own gender (set at onboarding) for grammatical agreement in
   // Spanish; anything else (older builds) means "not stated".
   const sonderGender =
@@ -181,16 +191,16 @@ app.post("/chat", async (req, res) => {
     // Retrieval keys off the current message only, not history — see
     // groq.ts's comment on generateReply for why.
     const examples = opener ? [] : await retrieveTopExamples(message);
-    const { reply, mood, traitSignal, voiceOn } = await generateReply(
+    const { reply, mood, traitSignal, voiceOn, sonderName: renamedTo } = await generateReply(
       message,
       history,
       examples,
       openingPresence,
       headphonesConnected,
       traitWeights,
-      { spokenAloud, local, opener, sonderGender, userGender: parseUserGender(req.body?.userGender), notes: parseNotes(req.body?.notes) }
+      { spokenAloud, local, opener, sonderGender, userGender: parseUserGender(req.body?.userGender), notes: parseNotes(req.body?.notes), call, sonderName }
     );
-    res.json({ reply, mood, traitSignal, voiceOn, retrievedExampleIds: examples.map((e) => e.id) });
+    res.json({ reply, mood, traitSignal, voiceOn, sonderName: renamedTo, retrievedExampleIds: examples.map((e) => e.id) });
   } catch (err) {
     console.error("[chat] error:", err);
     res.status(500).json({ error: "generation failed" });

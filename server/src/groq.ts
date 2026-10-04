@@ -455,6 +455,48 @@ function extractTraitSignal(raw: string): { reply: string; signal: TraitSignal }
 // are spoken aloud, so under pressure it fell back to the generic chatbot
 // self-description. The client reports the user's voice on/off toggle every
 // turn; absent that field (older builds) voice is assumed on, the default.
+// Founder, 2026-10-03: users may rename Sonder (at sign-up, or by asking)
+// and give people in their diary code names, for privacy. Clear requests
+// only — the server spots a rename itself, like the voice switch.
+const SONDER_NAME_NOTE = (name: string) =>
+  `They've named you ${name}. That's your name now: if you mention your ` +
+  `name, it's ${name}. These instructions call you Sonder; to them you're ${name}.`;
+const RENAMED_NOW_NOTE = (name: string) =>
+  `They just asked to call you ${name}. Accept it warmly in a few words and ` +
+  `go by ${name} from now on.`;
+const CODE_NAMES_NOTE =
+  "If they clearly ask you to call someone (or something) by another name — " +
+  "a code name, for privacy (\"let's call my boss 'the storm'\") — use only " +
+  "that name from then on, and never bring the real name back unless they do.";
+const RENAME_RES = [
+  /^\W*(?:(?:hey|ok|okay)\W+)?(?:sonder\W+)?(?:i(?:'d| would) like to call you|i(?:'ll| will| want to) call you|(?:can|may) i call you|let me call you|i'm going to call you|your new name is)\s+["'“]?(\p{L}[\p{L}'’-]{0,15}(?: \p{L}[\p{L}'’-]{0,15})?)["'”]?\s*[.!?]?\s*$/iu,
+  /^\W*(?:(?:oye|ok)\W+)?(?:sonder\W+)?(?:te (?:voy a |quiero )?llamar(?:é)?|¿?(?:te )?puedo llamarte|¿?te puedo llamar|tu nuevo nombre (?:es|será)|llámate|llamate)\s+["'“]?(\p{L}[\p{L}'’-]{0,15}(?: \p{L}[\p{L}'’-]{0,15})?)["'”]?\s*[.!?]?\s*$/iu,
+];
+// "I'll call you later" is a phone call, not a name.
+const NOT_A_NAME = /^(later|tomorrow|tonight|soon|back|again|today|now|then|ma[nñ]ana|luego|despu[eé]s|ahorita|ahora|hoy|otra vez|m[aá]s tarde)\b/i;
+export function requestedSonderName(message: string): string | undefined {
+  for (const re of RENAME_RES) {
+    const m = message.trim().match(re);
+    if (m && !NOT_A_NAME.test(m[1])) return m[1].trim().replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  }
+  return undefined;
+}
+
+// Founder, 2026-10-03: the mic is only for talking with Sonder, like a phone
+// call next to the diary. Tap to talk; Sonder answers by voice only; nothing
+// goes on the page; the call disappears when it ends, and what mattered goes
+// into Sonder's notes.
+const CALL_NOTE = (page: string) =>
+  "You're on a voice call with them right now, while they write in the " +
+  "diary. What they say reaches you as words; your answer is spoken aloud " +
+  "and never written on the page. Talk like a friend on the phone: short, " +
+  "natural spoken sentences, no lists, no headings, nothing that only works " +
+  "in writing. The earlier lines in this conversation are this call so far." +
+  (page.trim()
+    ? " This is the diary page they have open right now, so you can talk " +
+      "about it if it comes up (don't read it back to them):\n" + page
+    : " Their diary page is blank right now.");
+
 // Founder, 2026-10-03: asked by voice "How do you turn your voice back on?"
 // (voice already on), Sonder made up a five-step phone-settings guide with a
 // "Speaker/Audio" permission that doesn't exist. It had never been told how
@@ -513,6 +555,11 @@ const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean, turningOn: boolean) =>
         "your replies show as text only. If they ask why they can't hear you, " +
         "say that. Never claim you have no voice at all, and never say your " +
         "voice is on or that you've turned it on — it stays off.") +
+  // Founder, 2026-10-03: "Can you hear me now?" got "I can't hear you —
+  // your voice is off", mixing the two up.
+  " Hearing them and your own voice are two different things: you hear " +
+  "them when they talk to you on a call (the microphone), and you read " +
+  "what they write; your voice is only how you answer." +
   VOICE_SWITCH_FACTS;
 
 // Founder addition (2026-09-23): asking Sonder to talk should turn the voice
@@ -644,7 +691,11 @@ const NOTE_KEEPING_INSTRUCTION =
   "they're looking forward to or dreading, what they love and dislike, how " +
   "they like to be treated, and anything you promised to remember or ask " +
   "about — and always keep any promise you made (\"I'll ask how Monday " +
-  "went\"). Update or drop what's no longer true.\n\n" +
+  "went\"). Update or drop what's no longer true. If they asked you to " +
+  "call someone by another name (a code name, for privacy), note only " +
+  "that name and never the real one. Lines marked \"(on a call)\" were " +
+  "said aloud on a voice call that's now over: keep only what matters " +
+  "from it, like anything else.\n\n" +
   "Rules: plain short lines, one fact per line, starting with \"- \". Warm " +
   "and factual, never clinical — no diagnoses or labels. Only what they " +
   "actually said or clearly showed; never guess. Nothing about Kithe as a " +
@@ -791,9 +842,10 @@ const CAMERA_TRUTH_NOTE =
   "is kept only on their phone, but each message they write does travel to " +
   "Kithe's server and the AI service so you can answer, and neither keeps " +
   "it. Never say that what they write stays on the phone, never leaves it, " +
-  "or isn't sent anywhere. If they speak instead of writing, the recording " +
-  "goes once to the AI service to be turned into words, is deleted from " +
-  "their phone right after, and nobody keeps it. The whole message travels as they wrote it, " +
+  "or isn't sent anywhere. When they talk to you on a call, each recording " +
+  "goes once to the AI service to be turned into words and is deleted from " +
+  "their phone right after; the call itself isn't kept anywhere, only what " +
+  "you remember in your private notes on their phone. The whole message travels as they wrote it, " +
   "not a short version or a summary. Turning the camera off only stops the " +
   "few words about their expressions; their messages still travel to be " +
   "answered, so never suggest the camera setting as a way to keep their " +
@@ -866,6 +918,8 @@ export async function generateReply(
     sonderGender,
     userGender,
     notes,
+    call,
+    sonderName,
   }: {
     spokenAloud?: boolean;
     local?: LocalContext;
@@ -873,8 +927,12 @@ export async function generateReply(
     sonderGender?: SonderGender;
     userGender?: UserGender;
     notes?: string;
+    // On a voice call (founder, 2026-10-03): the page they're on, as text.
+    call?: { page: string };
+    // The name the user gave Sonder (sign-up or asking); undefined = Sonder.
+    sonderName?: string;
   } = {}
-): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean }> {
+): Promise<{ reply: string; mood: Mood; traitSignal: TraitSignal; voiceOn: boolean; sonderName?: string }> {
   const groundingBlock = retrievedExamples.map(formatExample).join("\n\n");
 
   // Real bug found 2026-08-18 (Part 34 item 1 investigation): replaying the
@@ -889,7 +947,9 @@ export async function generateReply(
   // highest-probability (better-grounded) continuation without flattening
   // Sonder's voice entirely.
   const TEMPERATURE = 0.6;
-  const turningVoiceOn = !spokenAloud && !opener && asksForVoice(message);
+  const turningVoiceOn = !call && !spokenAloud && !opener && asksForVoice(message);
+  const renamedTo = opener ? undefined : requestedSonderName(message);
+  const name = renamedTo ?? sonderName;
 
   const completion = await createChat({
     temperature: TEMPERATURE,
@@ -918,6 +978,11 @@ export async function generateReply(
           (local.localTime || local.weather ? "\n\n" + LOCAL_CONTEXT_NOTE(local) : "") +
           (local.sight ? "\n\n" + SIGHT_NOTE(local.sight) : "") +
           (notes ? "\n\n" + SONDER_NOTES_NOTE(notes) : "") +
+          (name && name.toLowerCase() !== "sonder" ? "\n\n" + SONDER_NAME_NOTE(name) : "") +
+          (renamedTo ? "\n\n" + RENAMED_NOW_NOTE(renamedTo) : "") +
+          "\n\n" +
+          CODE_NAMES_NOTE +
+          (call ? "\n\n" + CALL_NOTE(call.page) : "") +
           "\n\n" +
           CAMERA_TRUTH_NOTE +
           (opener ? "\n\n" + firstOpenerInstruction() : "") +
@@ -952,7 +1017,7 @@ export async function generateReply(
   const { reply: afterMood, mood } = extractMood(afterVoice);
   const { reply: afterTrait, signal: traitSignal } = extractTraitSignal(afterMood);
   const reply = stripLeakedTags(afterTrait);
-  return { reply, mood, traitSignal, voiceOn: turningVoiceOn };
+  return { reply, mood, traitSignal, voiceOn: turningVoiceOn, sonderName: renamedTo };
 }
 
 let client: Groq | null = null;

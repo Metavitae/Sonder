@@ -9,6 +9,7 @@ import { currentUserGender } from "./onboardingStorage";
 import { isCrisisMessage, crisisResponseFor } from "./crisisTripwire";
 import { loadStoredMessages, persistMessages } from "./chatHistory";
 import { currentSonderNotes, maybeUpdateSonderNotes } from "./sonderNotes";
+import { currentSonderName, DEFAULT_SONDER_NAME, setSonderName } from "./sonderName";
 import type { Presence } from "./motion";
 import type { TraitSignal, TraitWeights } from "./characterTraits";
 import { noteUserMessageLanguage, say } from "./i18n";
@@ -75,7 +76,7 @@ export type Mood = { warmth: Warmth; arousal: Arousal };
 
 const DEFAULT_MOOD: Mood = { warmth: "neutral", arousal: "med" };
 
-type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal; voiceOn?: boolean };
+type ChatResponse = { reply: string; mood?: Mood; traitSignal?: TraitSignal; voiceOn?: boolean; sonderName?: string };
 
 // Sonder's reply as a diary entry: dated, in the ink of the feeling it came
 // with (no mood tag → the neutral default, same as the mist's).
@@ -83,7 +84,8 @@ function sonderEntry(text: string, mood: Mood | undefined): ChatMessage {
   return { role: "sonder", text, at: Date.now(), ink: moodToMist(mood ?? DEFAULT_MOOD).color };
 }
 
-async function requestChat(
+// Also used for a voice call (useSonderCall.ts), with `extra` = { call, page }.
+export async function requestChat(
   text: string,
   history: ChatMessage[],
   sessionOpening: boolean,
@@ -92,7 +94,8 @@ async function requestChat(
   traitWeights?: TraitWeights,
   voiceEnabled = false,
   opener = false,
-  sight: string | null = null
+  sight: string | null = null,
+  extra: Record<string, unknown> = {}
 ): Promise<ChatResponse> {
   if (!API_BASE_URL) {
     throw new Error(
@@ -148,6 +151,10 @@ async function requestChat(
   // before the last 40 messages.
   const notes = await currentSonderNotes();
   if (notes) body.notes = notes;
+  // The name the user gave Sonder (sonderName.ts), if not the default.
+  const sonderName = await currentSonderName();
+  if (sonderName !== DEFAULT_SONDER_NAME) body.sonderName = sonderName;
+  Object.assign(body, extra);
   const res = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -293,6 +300,8 @@ export function useSonderChat(onVoiceOn?: () => void) {
         );
       }
       if (data.voiceOn) onVoiceOnRef.current?.();
+      // The user asked to call Sonder something else; the server spotted it.
+      if (data.sonderName) setSonderName(data.sonderName);
       // Founder, 2026-09-29: the mist and Sonder's ink react together, from
       // the same feeling — a reply without a mood tag is the neutral default
       // for both, never a new-colored line under an old mist. Past lines
