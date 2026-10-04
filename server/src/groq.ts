@@ -468,26 +468,52 @@ const VOICE_SWITCH_FACTS =
   "voice — never a step-by-step guide, never invent settings, never tell " +
   "them to restart the app or the phone.";
 
-const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
+// Founder, 2026-10-03: clear requests only, no reinterpretation. Leaving it
+// to the model failed both ways in a live test ("Can you hear me now?"
+// switched the voice on; "Talk to me." didn't), so the server decides from
+// the message itself and tells the model what happened.
+// English phrases count only when the message opens with them (after an
+// optional "please" / "can you" / "hey Sonder"), so "My sister wouldn't talk
+// to me at dinner" never switches the voice on.
+const EN_LEAD = "^\\W*(hey\\W+)?(sonder\\W+)?(please\\W+|(can|could|would|will) you\\W+|just\\W+)*";
+const CLEAR_VOICE_REQUEST_RE = new RegExp(
+  [
+    EN_LEAD + "(talk|speak) to me\\b",
+    EN_LEAD + "(talk|speak) (out loud|aloud)\\b",
+    EN_LEAD + "turn (on your voice|your voice (back )?on)\\b",
+    EN_LEAD + "read (it|this|that)( back)? (to me|out loud|aloud)\\b",
+    EN_LEAD + "say it (out loud|aloud)\\b",
+    EN_LEAD + "(i want to|let me) hear you\\b",
+    "\\bh[aá]blame\\b",
+    "\\b(prende|enciende|activa) tu voz\\b",
+    "\\bquiero (o[ií]rte|escucharte)\\b",
+    "\\bl[eé]emelo\\b",
+    "\\bdilo en voz alta\\b",
+  ].join("|"),
+  "i"
+);
+// "How do you turn your voice on?" is a question about the button, not a request.
+const ASKING_HOW_RE = /\b(how|c[oó]mo)\b/i;
+
+export function asksForVoice(message: string): boolean {
+  return CLEAR_VOICE_REQUEST_RE.test(message) && !ASKING_HOW_RE.test(message);
+}
+
+const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean, turningOn: boolean) =>
   (spokenAloud
     ? "You have a real voice: every reply you write is also spoken aloud on " +
       "the user's phone, in your own voice. If the user says they can't hear " +
       "you, never claim you're text-only or have no voice — that's false. " +
       "Say plainly that your voice should be playing, and it may be a " +
       "temporary hiccup or their media volume being down."
-    : "You have a real voice, but the user has turned it off, so right now " +
-      "your replies show as text only. If they ask why they can't hear you, " +
-      "say that. Never claim you have no voice at all. Only if they clearly " +
-      "and directly ask you to speak out loud (\"talk to me\", \"turn your " +
-      "voice on\", \"read it to me\", \"háblame\", \"prende tu voz\") — " +
-      // Founder, 2026-10-03: "Can you hear me now?" (said into the new mic)
-      // switched the voice on. Clear requests only, no reading into it.
-      "never because of anything else, like \"can you hear me?\", which is " +
-      "about you hearing them — you can turn it back on yourself: agree naturally, and at the " +
-      "very end of your reply, on its own line after all other tags, append " +
-      "[[voice:on]] — invisible to the user, stripped before display. " +
-      "Otherwise, mention they can also use the voice button at the top of " +
-      "the chat.") + VOICE_SWITCH_FACTS;
+    : turningOn
+      ? "They just asked you to talk, so your voice is switching on with this " +
+        "reply: this answer will be spoken aloud. Agree naturally, in a few words."
+      : "You have a real voice, but the user has turned it off, so right now " +
+        "your replies show as text only. If they ask why they can't hear you, " +
+        "say that. Never claim you have no voice at all, and never say your " +
+        "voice is on or that you've turned it on — it stays off.") +
+  VOICE_SWITCH_FACTS;
 
 // Founder addition (2026-09-23): asking Sonder to talk should turn the voice
 // on, not only the toggle button. Same invisible-tag mechanism as
@@ -863,6 +889,7 @@ export async function generateReply(
   // highest-probability (better-grounded) continuation without flattening
   // Sonder's voice entirely.
   const TEMPERATURE = 0.6;
+  const turningVoiceOn = !spokenAloud && !opener && asksForVoice(message);
 
   const completion = await createChat({
     temperature: TEMPERATURE,
@@ -883,7 +910,7 @@ export async function generateReply(
           "\n\n" +
           DEVICE_STATE_PHRASING_INSTRUCTION +
           "\n\n" +
-          VOICE_CAPABILITY_NOTE(spokenAloud) +
+          VOICE_CAPABILITY_NOTE(spokenAloud, turningVoiceOn) +
           "\n\n" +
           LANGUAGE_MIRROR_NOTE +
           "\n\n" +
@@ -920,11 +947,12 @@ export async function generateReply(
   const raw = completion.choices[0]?.message?.content ?? "";
   // Only honored while voice is actually off — a stray tag when it's
   // already on is a no-op.
-  const { reply: afterVoice, voiceOn } = extractVoiceOn(raw);
+  // The tag is no longer asked for; still stripped if a model writes one.
+  const { reply: afterVoice } = extractVoiceOn(raw);
   const { reply: afterMood, mood } = extractMood(afterVoice);
   const { reply: afterTrait, signal: traitSignal } = extractTraitSignal(afterMood);
   const reply = stripLeakedTags(afterTrait);
-  return { reply, mood, traitSignal, voiceOn: !spokenAloud && voiceOn };
+  return { reply, mood, traitSignal, voiceOn: turningVoiceOn };
 }
 
 let client: Groq | null = null;
