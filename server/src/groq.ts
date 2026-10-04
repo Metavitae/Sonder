@@ -455,8 +455,20 @@ function extractTraitSignal(raw: string): { reply: string; signal: TraitSignal }
 // are spoken aloud, so under pressure it fell back to the generic chatbot
 // self-description. The client reports the user's voice on/off toggle every
 // turn; absent that field (older builds) voice is assumed on, the default.
+// Founder, 2026-10-03: asked by voice "How do you turn your voice back on?"
+// (voice already on), Sonder made up a five-step phone-settings guide with a
+// "Speaker/Audio" permission that doesn't exist. It had never been told how
+// its own voice switch works in that case.
+const VOICE_SWITCH_FACTS =
+  " How your voice is switched, the only truth: the Voice on / Voice off " +
+  "button at the top of the diary, or simply asking you to talk or to be " +
+  "quiet. Nothing in the phone's settings or permissions controls it. If " +
+  "they ask how it works, say that in a sentence or two, in your own " +
+  "voice — never a step-by-step guide, never invent settings, never tell " +
+  "them to restart the app or the phone.";
+
 const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
-  spokenAloud
+  (spokenAloud
     ? "You have a real voice: every reply you write is also spoken aloud on " +
       "the user's phone, in your own voice. If the user says they can't hear " +
       "you, never claim you're text-only or have no voice — that's false. " +
@@ -470,7 +482,7 @@ const VOICE_CAPABILITY_NOTE = (spokenAloud: boolean) =>
       "very end of your reply, on its own line after all other tags, append " +
       "[[voice:on]] — invisible to the user, stripped before display. " +
       "Otherwise, mention they can also use the voice button at the top of " +
-      "the chat.";
+      "the chat.") + VOICE_SWITCH_FACTS;
 
 // Founder addition (2026-09-23): asking Sonder to talk should turn the voice
 // on, not only the toggle button. Same invisible-tag mechanism as
@@ -489,6 +501,10 @@ const LEAKED_TAG_RE = /[*_`~]*\[{1,2}\s*(?:mood|trait|voice)\s*:[^\]\n]*(?:\]{1,
 function stripLeakedTags(text: string): string {
   return text
     .replace(LEAKED_TAG_RE, "")
+    // It's handwriting on a page: markdown bold/italics showed as raw stars
+    // ("**Settings**", founder's 8T, 2026-10-03). Keep the words, drop the marks.
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1")
     .replace(/[ \t]+$/gm, "")
     .trim();
 }
